@@ -1,21 +1,33 @@
 import 'package:flutter/material.dart';
 
+import '../models/capability_types.dart';
 import '../models/smart_device.dart';
 
 /// A card widget displaying a summary of a smart device's status and telemetry.
 class DeviceCard extends StatelessWidget {
   final SmartDevice device;
 
-  const DeviceCard({
-    super.key,
-    required this.device,
-  });
+  const DeviceCard({super.key, required this.device});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    final statusColor = device.isConnected ? Colors.green : theme.colorScheme.error;
+    final voltageCapability = device.capabilities[CapabilityType.voltage.id];
+
+    final batteryCapability = device.capabilities[CapabilityType.battery.id];
+
+    final voltageText = voltageCapability != null
+        ? '${voltageCapability.currentValue} V'
+        : '-- V';
+
+    final batteryText = batteryCapability != null
+        ? '${batteryCapability.currentValue} %'
+        : '-- %';
+
+    final statusColor = device.isConnected
+        ? Colors.green
+        : theme.colorScheme.error;
     final statusText = device.isConnected ? 'Online' : 'Disconnected';
 
     // Future support: Sleeping state for low-power BLE devices
@@ -48,17 +60,11 @@ class DeviceCard extends StatelessWidget {
               const SizedBox(height: 12),
 
               // 3. Voltage Text
-              Text(
-                'Voltage: -- V',
-                style: theme.textTheme.bodyMedium,
-              ),
+              Text('Voltage: $voltageText', style: theme.textTheme.bodyMedium),
               const SizedBox(height: 6),
 
               // 4. Battery Text
-              Text(
-                'Battery: -- %',
-                style: theme.textTheme.bodyMedium,
-              ),
+              Text('Battery: $batteryText', style: theme.textTheme.bodyMedium),
             ],
           ),
         ),

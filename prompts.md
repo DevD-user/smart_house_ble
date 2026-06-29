@@ -1305,3 +1305,166 @@ Only connect Start Simulation button to BleManagerProvider.
 
 Production quality Flutter code only.
 ```
+
+---
+
+## Prompt 20
+**Date/Time:** 2026-06-30 01:37:42 (GMT+5:30)
+**Status:** Executed (Updated ble_manager.dart)
+**Content:**
+```text
+Update ble_manager.dart
+
+Requirements:
+
+1. Do NOT modify class structure.
+
+2. Inside deviceStream.listen(...)
+
+Find:
+
+final dynamic value = packet['value'];
+
+3. Add new variable below it:
+
+final int battery = packet['battery'] as int;
+
+4. When creating new device:
+
+Keep existing voltage capability creation.
+
+5. Create second capability:
+
+final batteryCap = DeviceCapability(
+  capabilityType: CapabilityType.battery,
+  currentValue: battery,
+  lastUpdated: DateTime.now(),
+  isAvailable: true,
+  unit: '%',
+);
+
+6. Update capabilities map.
+
+Current:
+
+capabilities: {
+  CapabilityType.voltage.id: voltageCap
+}
+
+Replace with:
+
+capabilities: {
+  CapabilityType.voltage.id: voltageCap,
+  CapabilityType.battery.id: batteryCap,
+}
+
+7. In ELSE block (existing device case)
+
+Current:
+
+_deviceProvider.updateDeviceCapability(
+  deviceId,
+  sensorId,
+  value,
+);
+
+Keep existing voltage update.
+
+Below it add:
+
+_deviceProvider.updateDeviceCapability(
+  deviceId,
+  CapabilityType.battery.id,
+  battery,
+);
+
+8. Do NOT modify any provider logic.
+
+9. Do NOT modify connection logic.
+
+10. Production quality code only.
+```
+
+---
+
+## Prompt 21
+**Date/Time:** 2026-06-30 01:39:59 (GMT+5:30)
+**Status:** Executed (Updated device_card.dart to show dynamic voltage and battery data)
+**Content:**
+```text
+Update device_card.dart
+
+Requirements:
+
+1. Keep class structure unchanged.
+
+Do NOT convert widget type.
+
+Remain StatelessWidget.
+
+2. Keep existing imports.
+
+Add import:
+
+../models/capability_types.dart
+
+3. Inside build() method, after:
+
+final theme = Theme.of(context);
+
+Add:
+
+final voltageCapability =
+    device.capabilities[CapabilityType.voltage.id];
+
+final batteryCapability =
+    device.capabilities[CapabilityType.battery.id];
+
+final voltageText =
+    voltageCapability != null
+        ? '${voltageCapability.currentValue} V'
+        : '-- V';
+
+final batteryText =
+    batteryCapability != null
+        ? '${batteryCapability.currentValue} %'
+        : '-- %';
+
+4. Find current voltage section.
+
+Current:
+
+Text(
+  'Voltage: -- V'
+)
+
+Replace with:
+
+Text(
+  'Voltage: $voltageText',
+  style: theme.textTheme.bodyMedium,
+)
+
+5. Find current battery section.
+
+Current:
+
+Text(
+  'Battery: -- %'
+)
+
+Replace with:
+
+Text(
+  'Battery: $batteryText',
+  style: theme.textTheme.bodyMedium,
+)
+
+6. Do NOT modify device status logic.
+
+7. Do NOT modify card layout.
+
+8. Do NOT modify spacing.
+
+9. Production quality Flutter code only.
+```

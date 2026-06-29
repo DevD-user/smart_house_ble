@@ -27,6 +27,7 @@ class BleManager {
       final String deviceId = packet['deviceId'] as String;
       final int sensorId = packet['sensorId'] as int;
       final dynamic value = packet['value'];
+      final int battery = packet['battery'] as int;
 
       final existingDevice = _deviceProvider.getDevice(deviceId);
 
@@ -39,6 +40,14 @@ class BleManager {
           unit: 'V',
         );
 
+        final batteryCap = DeviceCapability(
+          capabilityType: CapabilityType.battery,
+          currentValue: battery,
+          lastUpdated: DateTime.now(),
+          isAvailable: true,
+          unit: '%',
+        );
+
         final newDevice = SmartDevice(
           deviceId: deviceId,
           deviceName: deviceId == 'Node_A'
@@ -46,13 +55,21 @@ class BleManager {
               : (deviceId == 'Node_B' ? 'Node B' : deviceId),
           isConnected: true,
           lastSeen: DateTime.now(),
-          capabilities: {CapabilityType.voltage.id: voltageCap},
+          capabilities: {
+            CapabilityType.voltage.id: voltageCap,
+            CapabilityType.battery.id: batteryCap,
+          },
         );
 
         _deviceProvider.addDevice(newDevice);
       } else {
         existingDevice.markConnected();
         _deviceProvider.updateDeviceCapability(deviceId, sensorId, value);
+        _deviceProvider.updateDeviceCapability(
+          deviceId,
+          CapabilityType.battery.id,
+          battery,
+        );
       }
 
       final connectedCount = _deviceProvider.devices.values
