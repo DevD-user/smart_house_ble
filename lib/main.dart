@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'screens/dashboard_screen.dart';
 import 'state/connection/connection_provider.dart';
 import 'state/device/device_provider.dart';
 import 'state/theme/theme_provider.dart';
@@ -26,21 +27,14 @@ class SmartHouseApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
-    final theme = themeProvider.isDarkMode ? AppTheme.darkTheme : AppTheme.lightTheme;
+    final theme = themeProvider.isDarkMode
+        ? AppTheme.darkTheme
+        : AppTheme.lightTheme;
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: theme,
-      home: Scaffold(
-        appBar: AppBar(
-          title: const Text('Smart House BLE'),
-        ),
-        body: const Center(
-          child: Text(
-            'System Core Initialized',
-          ),
-        ),
-      ),
+      home: const DashboardScreen(),
     );
   }
 }

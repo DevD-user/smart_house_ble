@@ -686,3 +686,168 @@ System Core Initialized
 
 11. Clean scalable production architecture only.
 ```
+
+---
+
+## Prompt 11
+**Date/Time:** 2026-06-29 23:39:22 (GMT+5:30)
+**Status:** Executed (Created dashboard_screen.dart)
+**Content:**
+```text
+Create a new file called dashboard_screen.dart
+
+Location:
+lib/screens/dashboard_screen.dart
+
+Requirements:
+
+Create StatelessWidget called DashboardScreen.
+
+Import provider package.
+
+Import ThemeProvider and DeviceProvider.
+
+1. AppBar
+
+Title = Smart House BLE
+
+Right side IconButton for theme toggle.
+
+When pressed:
+
+Use Provider to access ThemeProvider.
+
+Call toggleTheme().
+
+Use dark_mode icon.
+
+2. Main body uses Padding (16).
+
+3. First widget:
+
+Large Card.
+
+Inside show:
+
+Connected Devices: 0
+
+BLE Status: Idle
+
+Use Column layout.
+
+Add clean spacing.
+
+4. Add SizedBox spacing below status card.
+
+5. Section title:
+
+Devices
+
+Bold text.
+
+6. Add Expanded widget.
+
+Inside use Consumer<DeviceProvider>.
+
+Check device collection.
+
+If empty:
+
+Show centered text:
+
+No devices connected
+
+If device list is not empty:
+
+Use ListView.builder structure.
+
+Create temporary Card widget for each device.
+
+Inside temporary card show:
+
+Device Name Placeholder
+
+Status Placeholder
+
+Voltage Placeholder
+
+(No real data yet)
+
+Do not hardcode Node_A or Node_B.
+
+Must dynamically use device collection length.
+
+7. Bottom Row with two buttons.
+
+Button 1:
+
+ElevatedButton
+
+Text = Start Simulation
+
+(No onPressed logic yet)
+
+Button 2:
+
+OutlinedButton
+
+Text = Diagnostics
+
+(No navigation yet)
+
+8. Must use Theme.of(context) colors.
+
+No hardcoded colors.
+
+No fake BLE logic.
+
+No navigation.
+
+No graphs.
+
+No extra files.
+
+Production quality Flutter code only.
+
+Clean spacing.
+
+Minimal professional UI.
+
+Samsung SmartThings style.
+
+No futuristic glow effects.
+```
+
+---
+
+## Prompt 12
+**Date/Time:** 2026-06-29 23:49:33 (GMT+5:30)
+**Status:** Executed (Updated main.dart to launch DashboardScreen)
+**Content:**
+```text
+Update main.dart.
+
+Requirements:
+
+1. Import dashboard_screen.dart
+
+2. Inside MaterialApp replace current home Scaffold.
+
+Remove:
+
+AppBar
+
+System Core Initialized text
+
+Entire old Scaffold widget.
+
+3. Replace home with:
+
+home: const DashboardScreen()
+
+4. Do not change any provider logic.
+
+5. Do not change theme logic.
+
+Only update home screen to launch DashboardScreen.
+```
