@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import 'screens/dashboard_screen.dart';
+import 'state/ble/ble_manager_provider.dart';
 import 'state/connection/connection_provider.dart';
 import 'state/device/device_provider.dart';
 import 'state/theme/theme_provider.dart';
@@ -13,6 +14,18 @@ void main() {
       providers: [
         ChangeNotifierProvider(create: (_) => DeviceProvider()),
         ChangeNotifierProvider(create: (_) => ConnectionProvider()),
+        ChangeNotifierProxyProvider2<DeviceProvider, ConnectionProvider,
+            BleManagerProvider>(
+          create: (_) => BleManagerProvider(),
+          update: (_, deviceProvider, connectionProvider, bleProvider) {
+            bleProvider ??= BleManagerProvider();
+            bleProvider.initialize(
+              deviceProvider: deviceProvider,
+              connectionProvider: connectionProvider,
+            );
+            return bleProvider;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],
       child: const SmartHouseApp(),

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../state/ble/ble_manager_provider.dart';
 import '../state/connection/connection_provider.dart';
 import '../state/device/device_provider.dart';
 import '../state/theme/theme_provider.dart';
+import '../widgets/device_card.dart';
 
 /// The main dashboard screen showing BLE status and connected smart devices.
 class DashboardScreen extends StatelessWidget {
@@ -35,7 +37,9 @@ class DashboardScreen extends StatelessWidget {
               // 1. Connection Status Card
               Consumer<ConnectionProvider>(
                 builder: (context, connectionProvider, child) {
-                  final statusText = _getBleStatusText(connectionProvider.connectionState);
+                  final statusText = _getBleStatusText(
+                    connectionProvider.connectionState,
+                  );
                   return SizedBox(
                     width: double.infinity,
                     child: Card(
@@ -54,7 +58,8 @@ class DashboardScreen extends StatelessWidget {
                             Text(
                               'BLE Status: $statusText',
                               style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.7),
+                                color: theme.textTheme.bodyMedium?.color
+                                    ?.withValues(alpha: 0.7),
                               ),
                             ),
                           ],
@@ -82,50 +87,13 @@ class DashboardScreen extends StatelessWidget {
                     final devicesList = deviceProvider.devices.values.toList();
 
                     if (devicesList.isEmpty) {
-                      return const Center(
-                        child: Text('No devices connected'),
-                      );
+                      return const Center(child: Text('No devices connected'));
                     }
 
                     return ListView.builder(
                       itemCount: devicesList.length,
                       itemBuilder: (context, index) {
-                        // Creating a temporary Card widget for each device
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 6.0),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Device Name Placeholder',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(
-                                      'Status Placeholder',
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        color: theme.textTheme.bodyMedium?.color?.withValues(alpha: 0.6),
-                                      ),
-                                    ),
-                                    Text(
-                                      'Voltage Placeholder',
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
+                        return DeviceCard(device: devicesList[index]);
                       },
                     );
                   },
@@ -139,7 +107,10 @@ class DashboardScreen extends StatelessWidget {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {
-                        // No onPressed logic yet
+                        Provider.of<BleManagerProvider>(
+                          context,
+                          listen: false,
+                        ).startSimulation();
                       },
                       child: const Text('Start Simulation'),
                     ),

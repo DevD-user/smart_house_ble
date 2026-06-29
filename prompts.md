@@ -851,3 +851,457 @@ home: const DashboardScreen()
 
 Only update home screen to launch DashboardScreen.
 ```
+
+---
+
+## Prompt 13
+**Date/Time:** 2026-06-30 00:09:49 (GMT+5:30)
+**Status:** Executed (Created device_card.dart)
+**Content:**
+```text
+Create a new file called device_card.dart
+
+Location:
+lib/widgets/device_card.dart
+
+Requirements:
+
+Import flutter/material.dart
+
+Import smart_device.dart
+
+Create StatelessWidget called DeviceCard.
+
+Constructor takes:
+
+required SmartDevice device
+
+Root layout:
+
+Ensure card expands horizontally to fill parent width.
+
+Wrap root widget using SizedBox or Container.
+
+Use:
+
+width: double.infinity
+
+Inside create Card widget.
+
+Use Padding (16).
+
+Layout:
+
+Column
+
+crossAxisAlignment.start
+
+Inside show:
+
+1. Device Name
+
+Use:
+
+device.deviceName
+
+Display bold text.
+
+2. SizedBox spacing.
+
+3. Device Status Logic
+
+Evaluate device.isConnected.
+
+If true:
+
+Show text:
+
+Online
+
+Use subtle green text color.
+
+If false:
+
+Show text:
+
+Disconnected
+
+Use subtle red text color.
+
+Add comment placeholder:
+
+// Future support: Sleeping state for low-power BLE devices
+
+4. SizedBox spacing.
+
+5. Voltage text.
+
+Temporarily show:
+
+Voltage: -- V
+
+(Real value later)
+
+6. SizedBox spacing.
+
+7. Battery text.
+
+Temporarily show:
+
+Battery: -- %
+
+(Real value later)
+
+8. Use Theme.of(context) colors everywhere.
+
+Do not hardcode card colors.
+
+Rounded card corners.
+
+No glow effects.
+
+No graphs.
+
+No buttons.
+
+No tap logic yet.
+
+No navigation.
+
+Minimal professional design.
+
+Samsung SmartThings style.
+
+Production quality Flutter code only.
+```
+
+---
+
+## Prompt 14
+**Date/Time:** 2026-06-30 00:14:32 (GMT+5:30)
+**Status:** Executed (Updated dashboard_screen.dart to use DeviceCard)
+**Content:**
+```text
+Update dashboard_screen.dart
+
+Requirements:
+
+1. Import:
+
+../widgets/device_card.dart
+
+2. Find ListView.builder inside Consumer<DeviceProvider>.
+
+3. Remove temporary placeholder Card widget currently inside itemBuilder.
+
+Delete:
+
+Device Name Placeholder
+
+Status Placeholder
+
+Voltage Placeholder
+
+Entire temporary Card structure.
+
+4. Replace itemBuilder with:
+
+return DeviceCard(
+  device: devicesList[index],
+);
+
+5. Do not change AppBar.
+
+6. Do not change Connection Status Card.
+
+7. Do not change Start Simulation button.
+
+8. Do not change Diagnostics button.
+
+9. Do not modify provider logic.
+
+10. Only replace placeholder device card with reusable DeviceCard widget.
+
+Production quality Flutter code only.
+```
+
+---
+
+## Prompt 15
+**Date/Time:** 2026-06-30 00:54:49 (GMT+5:30)
+**Status:** Executed (Created ble_manager_provider.dart)
+**Content:**
+```text
+Create a new file called ble_manager_provider.dart
+
+Location:
+lib/state/ble/ble_manager_provider.dart
+
+Requirements:
+
+Import flutter/material.dart
+
+Import:
+
+../../services/ble_manager.dart
+
+../device/device_provider.dart
+
+../connection/connection_provider.dart
+
+Create class:
+
+BleManagerProvider
+
+Extend ChangeNotifier
+
+Inside create field:
+
+late BleManager _bleManager;
+
+Constructor takes:
+
+required DeviceProvider deviceProvider
+
+required ConnectionProvider connectionProvider
+
+Inside constructor initialize:
+
+_bleManager = BleManager(
+  deviceProvider,
+  connectionProvider,
+);
+
+Create method:
+
+void startSimulation()
+
+Inside call:
+
+_bleManager.startMockBle();
+
+Create method:
+
+void stopSimulation()
+
+Inside call:
+
+_bleManager.stopMockBle();
+
+Override dispose()
+
+Inside call:
+
+_bleManager.dispose();
+
+Call super.dispose();
+
+Do NOT add extra logic.
+
+Do NOT modify other files.
+
+Production quality code only.
+```
+
+---
+
+## Prompt 17
+**Date/Time:** 2026-06-30 01:06:14 (GMT+5:30)
+**Status:** Executed (Updated ble_manager_provider.dart)
+**Content:**
+```text
+Update ble_manager_provider.dart
+
+File:
+lib/state/ble/ble_manager_provider.dart
+
+Requirements:
+
+1. Remove constructor parameters.
+
+Delete current constructor requiring:
+
+DeviceProvider
+
+ConnectionProvider
+
+2. Change field:
+
+late BleManager _bleManager;
+
+to:
+
+BleManager? _bleManager;
+
+3. Create method:
+
+void initialize({
+  required DeviceProvider deviceProvider,
+  required ConnectionProvider connectionProvider,
+})
+
+Inside method:
+
+If _bleManager is null:
+
+Initialize:
+
+_bleManager = BleManager(
+  deviceProvider,
+  connectionProvider,
+);
+
+4. Update startSimulation()
+
+Change to:
+
+_bleManager?.startMockBle();
+
+5. Update stopSimulation()
+
+Change to:
+
+_bleManager?.stopMockBle();
+
+6. Update dispose()
+
+Check null before dispose.
+
+Example:
+
+_bleManager?.dispose();
+
+7. Do not change imports.
+
+8. Do not modify other files.
+
+Production quality code only.
+```
+
+---
+
+## Prompt 18
+**Date/Time:** 2026-06-30 01:11:00 (GMT+5:30)
+**Status:** Executed (Updated main.dart)
+**Content:**
+```text
+Update main.dart
+
+Requirements:
+
+1. Keep all existing imports.
+
+2. Import:
+
+state/ble/ble_manager_provider.dart
+
+3. Keep existing providers unchanged:
+
+DeviceProvider
+
+ConnectionProvider
+
+ThemeProvider
+
+4. Add a new provider BETWEEN ConnectionProvider and ThemeProvider.
+
+Use:
+
+ChangeNotifierProxyProvider2<
+  DeviceProvider,
+  ConnectionProvider,
+  BleManagerProvider
+>
+
+5. Proxy provider code:
+
+create: (_) => BleManagerProvider(),
+
+update: (_, deviceProvider, connectionProvider, bleProvider) {
+  bleProvider ??= BleManagerProvider();
+
+  bleProvider.initialize(
+    deviceProvider: deviceProvider,
+    connectionProvider: connectionProvider,
+  );
+
+  return bleProvider;
+}
+
+6. Final provider order:
+
+DeviceProvider
+
+ConnectionProvider
+
+BleManagerProvider (proxy provider)
+
+ThemeProvider
+
+7. Do NOT modify SmartHouseApp widget.
+
+8. Do NOT modify theme logic.
+
+9. Do NOT modify MaterialApp.
+
+10. Do NOT modify DashboardScreen.
+
+Only update provider tree.
+
+Production quality Flutter code only.
+```
+
+---
+
+## Prompt 19
+**Date/Time:** 2026-06-30 01:20:16 (GMT+5:30)
+**Status:** Executed (Updated dashboard_screen.dart)
+**Content:**
+```text
+Update dashboard_screen.dart
+
+Requirements:
+
+1. Import:
+
+../state/ble/ble_manager_provider.dart
+
+2. Do NOT convert to StatefulWidget.
+
+Keep DashboardScreen as StatelessWidget.
+
+3. Find Start Simulation button.
+
+Current:
+
+onPressed: () {
+  // No onPressed logic yet
+}
+
+4. Replace with:
+
+onPressed: () {
+  Provider.of<BleManagerProvider>(
+    context,
+    listen: false,
+  ).startSimulation();
+}
+
+5. Do NOT modify AppBar.
+
+6. Do NOT modify Theme toggle button.
+
+7. Do NOT modify Connection Status Card.
+
+8. Do NOT modify DeviceProvider consumer.
+
+9. Do NOT modify DeviceCard logic.
+
+10. Do NOT modify Diagnostics button.
+
+11. Preserve entire existing UI.
+
+Only connect Start Simulation button to BleManagerProvider.
+
+Production quality Flutter code only.
+```

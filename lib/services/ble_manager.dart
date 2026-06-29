@@ -14,10 +14,8 @@ class BleManager {
   final ConnectionProvider _connectionProvider;
   StreamSubscription? _deviceSubscription;
 
-  BleManager(
-    this._deviceProvider,
-    this._connectionProvider,
-  ) : _mockBleService = MockBleService();
+  BleManager(this._deviceProvider, this._connectionProvider)
+    : _mockBleService = MockBleService();
 
   /// Starts scanning, starts the mock telemetry stream, and listens to the device telemetry stream.
   void startMockBle() {
