@@ -438,3 +438,112 @@ void dispose()
 
 13. Clean production-style scalable architecture only.
 ```
+
+---
+
+## Prompt 8
+**Date/Time:** 2026-06-29 21:14:21 (GMT+5:30)
+**Status:** Executed (Created ble_manager.dart)
+**Content:**
+```text
+Create a Dart file called ble_manager.dart
+
+Location:
+lib/services/ble_manager.dart
+
+Requirements:
+
+1. Import dart:async
+
+2. Import mock_ble_service.dart
+
+3. Import smart_device.dart
+
+4. Import device_capability.dart
+
+5. Import capability_types.dart
+
+6. Import device_provider.dart
+
+7. Import connection_provider.dart
+
+8. Create class BleManager
+
+9. Private fields:
+
+final MockBleService _mockBleService
+
+final DeviceProvider _deviceProvider
+
+final ConnectionProvider _connectionProvider
+
+StreamSubscription? _deviceSubscription
+
+10. Constructor must receive:
+
+DeviceProvider
+
+ConnectionProvider
+
+Inside constructor initialize MockBleService.
+
+11. Create method:
+
+void startMockBle()
+
+Behavior:
+
+- call _connectionProvider.startScanning()
+
+- call _mockBleService.startMockStreaming()
+
+- listen to deviceStream
+
+12. On receiving packet:
+
+Read:
+
+deviceId
+
+sensorId
+
+value
+
+13. If device does not exist:
+
+Create SmartDevice
+
+Create DeviceCapability for voltage
+
+Add device to DeviceProvider
+
+14. If device exists:
+
+Update device capability
+
+15. Update connection state using:
+
+_connectionProvider.setConnected()
+
+16. Create method:
+
+void stopMockBle()
+
+- stop mock service
+
+- cancel stream subscription
+
+- reset connection provider
+
+17. Create dispose()
+
+- cancel stream
+
+- dispose mock service
+
+18. No UI code
+
+19. No other files
+
+20. Clean production-style scalable architecture only
+```
