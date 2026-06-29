@@ -547,3 +547,142 @@ void stopMockBle()
 
 20. Clean production-style scalable architecture only
 ```
+
+---
+
+## Prompt 9
+**Date/Time:** 2026-06-29 22:10:04 (GMT+5:30)
+**Status:** Executed (Created app_theme.dart)
+**Content:**
+```text
+Create a Dart file called app_theme.dart
+
+Location:
+lib/theme/app_theme.dart
+
+Requirements:
+
+Create class AppTheme.
+
+Inside create two static ThemeData objects.
+
+1. darkTheme
+
+Dark theme colors:
+
+Background color = Color(0xFF0F1115)
+
+Card color = Color(0xFF1A1D24)
+
+Primary accent = Color(0xFF00BCD4)
+
+Text color = Colors.white
+
+Secondary text = Color(0xFF9E9E9E)
+
+2. lightTheme
+
+Light theme colors:
+
+Background color = Color(0xFFF7F9FC)
+
+Card color = Colors.white
+
+Primary accent = Color(0xFF0288D1)
+
+Text color = Color(0xFF1A1A1A)
+
+Secondary text = Color(0xFF757575)
+
+Requirements:
+
+Use clean ThemeData structure.
+
+Configure scaffoldBackgroundColor.
+
+Configure cardTheme.
+
+Configure appBarTheme.
+
+Configure colorScheme.
+
+No UI widgets.
+
+No extra files.
+
+Production-quality Flutter code only.
+```
+
+---
+
+## Prompt 10
+**Date/Time:** 2026-06-29 22:14:27 (GMT+5:30)
+**Status:** Executed (Rewrote main.dart)
+**Content:**
+```text
+Rewrite main.dart completely.
+
+Requirements:
+
+1. Import flutter/material.dart
+
+2. Import provider package
+
+3. Import:
+
+device_provider.dart
+
+connection_provider.dart
+
+theme_provider.dart
+
+app_theme.dart
+
+4. Create main()
+
+Inside initialize MultiProvider.
+
+Providers:
+
+DeviceProvider
+
+ConnectionProvider
+
+ThemeProvider
+
+5. Create class SmartHouseApp extends StatelessWidget.
+
+6. Inside build():
+
+Read ThemeProvider using Provider.of.
+
+If dark mode:
+
+theme = AppTheme.darkTheme
+
+Else:
+
+theme = AppTheme.lightTheme
+
+7. Create MaterialApp.
+
+Disable debug banner.
+
+Use dynamic theme from ThemeProvider.
+
+8. Temporary home screen:
+
+Scaffold
+
+AppBar title = Smart House BLE
+
+Body center text:
+
+System Core Initialized
+
+9. No navigation yet.
+
+10. No other files.
+
+11. Clean scalable production architecture only.
+```

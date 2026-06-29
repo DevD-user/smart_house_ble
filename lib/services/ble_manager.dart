@@ -14,13 +14,10 @@ class BleManager {
   final ConnectionProvider _connectionProvider;
   StreamSubscription? _deviceSubscription;
 
-  /// Creates a [BleManager] and initializes the internal [MockBleService].
-  BleManager({
-    required DeviceProvider deviceProvider,
-    required ConnectionProvider connectionProvider,
-  })  : _deviceProvider = deviceProvider,
-        _connectionProvider = connectionProvider,
-        _mockBleService = MockBleService();
+  BleManager(
+    this._deviceProvider,
+    this._connectionProvider,
+  ) : _mockBleService = MockBleService();
 
   /// Starts scanning, starts the mock telemetry stream, and listens to the device telemetry stream.
   void startMockBle() {
@@ -51,9 +48,7 @@ class BleManager {
               : (deviceId == 'Node_B' ? 'Node B' : deviceId),
           isConnected: true,
           lastSeen: DateTime.now(),
-          capabilities: {
-            CapabilityType.voltage.id: voltageCap,
-          },
+          capabilities: {CapabilityType.voltage.id: voltageCap},
         );
 
         _deviceProvider.addDevice(newDevice);
@@ -62,8 +57,9 @@ class BleManager {
         _deviceProvider.updateDeviceCapability(deviceId, sensorId, value);
       }
 
-      final connectedCount =
-          _deviceProvider.devices.values.where((d) => d.isConnected).length;
+      final connectedCount = _deviceProvider.devices.values
+          .where((d) => d.isConnected)
+          .length;
       _connectionProvider.setConnected(connectedCount);
     });
   }
