@@ -37,8 +37,7 @@ extern "C"
 
 // Profile characteristic value lengths
 #define POTLED_ADC_LEN                       2  // uint16_t (0-4095 raw value)
-#define POTLED_LED_LEN                       1  // uint8_t (0x00=OFF, 0x01=ON)
-
+#define POTLED_LED_LEN                       2  // uint8_t[2] = [PERIPHERAL_ID, VALUE]
 /*********************************************************************
  * TYPEDEFS
  */
