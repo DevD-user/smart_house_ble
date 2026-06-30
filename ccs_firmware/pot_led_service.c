@@ -367,13 +367,16 @@ static bStatus_t potLedService_WriteAttrCB(uint16 connHandle, gattAttribute_t *p
       }
       else
       {
-        // Write the LED value
-        uint8 writeVal = pValue[0];
-        if (writeVal == 0x00 || writeVal == 0x01)
-        {
-          pAttr->pValue[0] = writeVal;
-          notifyApp = POTLED_LED_STATE;
-        }
+        uint8 peripheralId = pValue[0];
+        uint8 commandValue = pValue[1];
+
+        // Validate packet structure
+        if ((peripheralId == 1 || peripheralId == 2) &&
+        (commandValue == 0x00 || commandValue == 0x01))
+      {
+        memcpy(pAttr->pValue, pValue, POTLED_LED_LEN);
+        notifyApp = POTLED_LED_STATE;
+      }
         else
         {
           status = ATT_ERR_INVALID_VALUE;
