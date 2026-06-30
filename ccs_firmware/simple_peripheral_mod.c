@@ -155,15 +155,34 @@ static void SimplePeripheral_processPotLedCharValue(uint8 paramID)
 {
   if (paramID == POTLED_LED_STATE)
   {
-    uint8_t ledState = 0;
-    // Retrieve value written to GATT server
-    PotLedService_GetParameter(POTLED_LED_STATE, &ledState);
+    uint8_t commandPacket[2] = {0};
 
-    // Apply value to the onboard LED pin
-    PIN_setOutputValue(ledPinHandle, Board_PIN_LED0, ledState);
+    // Retrieve BLE command packet
+    PotLedService_GetParameter(POTLED_LED_STATE, commandPacket);
+
+    uint8_t peripheralId = commandPacket[0];
+    uint8_t commandValue = commandPacket[1];
+
+    switch (peripheralId)
+    {
+      case 1:
+        // Red LED
+        PIN_setOutputValue(
+          ledPinHandle,
+          Board_PIN_LED0,
+          commandValue
+        );
+        break;
+
+      case 2:
+        // Future Green LED support
+        break;
+
+      default:
+        break;
+    }
   }
 }
-
 /*********************************************************************
  * @fn      SimplePeripheral_performAdcSample
  *
