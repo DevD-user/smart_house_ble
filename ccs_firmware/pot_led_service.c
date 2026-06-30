@@ -220,7 +220,7 @@ bStatus_t PotLedService_SetParameter(uint8 param, uint8 len, void *value)
     case POTLED_LED_STATE:
       if (len == POTLED_LED_LEN)
       {
-        potLedLedVal[0] = *((uint8*)value);
+       memcpy(potLedLedVal, value, POTLED_LED_LEN);
       }
       else
       {
