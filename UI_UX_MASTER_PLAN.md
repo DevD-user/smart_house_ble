@@ -277,7 +277,7 @@ To make the application feel responsive and alive:
 
 ### 18. Settings Page Architecture Decision
 *   **Current Version:** A settings page is **postponed** as the initial version focuses on core dashboard controls and telemetry graph rendering.
-*   **Future Scope:** A settings tab will be added to configure BLE scan timeout rates, developer logs, sensor calibration, alarm thresholds, and OTA firmware updates.
+*   **Future Scope:** A settings tab will be added to configure BLE scan timeout rates, developer logs, future device configuration parameters, alarm thresholds, and OTA firmware updates.
 
 ---
 

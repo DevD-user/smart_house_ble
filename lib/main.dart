@@ -1,21 +1,29 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
-import 'screens/dashboard_screen.dart';
+import 'screens/splash_screen.dart';
 import 'state/ble/ble_manager_provider.dart';
 import 'state/connection/connection_provider.dart';
 import 'state/device/device_provider.dart';
 import 'state/theme/theme_provider.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => DeviceProvider()),
         ChangeNotifierProvider(create: (_) => ConnectionProvider()),
-        ChangeNotifierProxyProvider2<DeviceProvider, ConnectionProvider,
-            BleManagerProvider>(
+        ChangeNotifierProxyProvider2<
+          DeviceProvider,
+          ConnectionProvider,
+          BleManagerProvider
+        >(
           create: (_) => BleManagerProvider(),
           update: (_, deviceProvider, connectionProvider, bleProvider) {
             bleProvider ??= BleManagerProvider();
@@ -47,7 +55,7 @@ class SmartHouseApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       theme: theme,
-      home: const DashboardScreen(),
+      home: const SplashScreen(),
     );
   }
 }
