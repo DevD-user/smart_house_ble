@@ -1,7 +1,6 @@
 import 'dart:async';
+import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
-import '../models/capability_types.dart';
-import '../models/device_capability.dart';
 import '../models/smart_device.dart';
 import '../state/connection/connection_provider.dart';
 import '../state/device/device_provider.dart';
@@ -9,6 +8,8 @@ import 'mock_ble_service.dart';
 
 /// Manager for handling Bluetooth Low Energy (BLE) operations and stream telemetry.
 class BleManager {
+  static const String _serviceUuid = '48c5d820-ac2a-11e7-abc4-cec278b6b50a';
+
   final MockBleService _mockBleService;
   final DeviceProvider _deviceProvider;
   final ConnectionProvider _connectionProvider;
@@ -17,71 +18,64 @@ class BleManager {
   BleManager(this._deviceProvider, this._connectionProvider)
     : _mockBleService = MockBleService();
 
-  /// Starts scanning, starts the mock telemetry stream, and listens to the device telemetry stream.
+  /// Starts a real BLE scan and listens to the scan results, adding matching devices to the provider.
   void startMockBle() {
     _connectionProvider.startScanning();
-    _mockBleService.startMockStreaming();
 
     _deviceSubscription?.cancel();
-    _deviceSubscription = _mockBleService.deviceStream.listen((packet) {
-      final String deviceId = packet['deviceId'] as String;
-      final int sensorId = packet['sensorId'] as int;
-      final dynamic value = packet['value'];
-      final int battery = packet['battery'] as int;
+    _deviceSubscription = FlutterBluePlus.scanResults.listen((results) {
+      for (final r in results) {
+        final device = r.device;
+        final localName = r.advertisementData.advName;
+        final serviceUuids = r.advertisementData.serviceUuids;
 
-      final existingDevice = _deviceProvider.getDevice(deviceId);
+        // Check if device advertises the service UUID or matches the local name 'Simple Peripheral'
+        final bool hasServiceUuid = serviceUuids.any((uuid) =>
+            uuid.toString().toLowerCase() == _serviceUuid.toLowerCase());
+        final bool matchesName = localName.toLowerCase().contains('simple peripheral') ||
+            device.platformName.toLowerCase().contains('simple peripheral');
 
-      if (existingDevice == null) {
-        final voltageCap = DeviceCapability(
-          capabilityType: CapabilityType.voltage,
-          currentValue: value,
-          lastUpdated: DateTime.now(),
-          isAvailable: true,
-          unit: 'V',
-        );
+        if (hasServiceUuid || matchesName) {
+          final String deviceId = device.remoteId.str;
+          final String deviceName = localName.isNotEmpty
+              ? localName
+              : (device.platformName.isNotEmpty
+                  ? device.platformName
+                  : 'Simple Peripheral');
 
-        final batteryCap = DeviceCapability(
-          capabilityType: CapabilityType.battery,
-          currentValue: battery,
-          lastUpdated: DateTime.now(),
-          isAvailable: true,
-          unit: '%',
-        );
-
-        final newDevice = SmartDevice(
-          deviceId: deviceId,
-          deviceName: deviceId == 'Node_A'
-              ? 'Node A'
-              : (deviceId == 'Node_B' ? 'Node B' : deviceId),
-          isConnected: true,
-          lastSeen: DateTime.now(),
-          capabilities: {
-            CapabilityType.voltage.id: voltageCap,
-            CapabilityType.battery.id: batteryCap,
-          },
-        );
-
-        _deviceProvider.addDevice(newDevice);
-      } else {
-        existingDevice.markConnected();
-        _deviceProvider.updateDeviceCapability(deviceId, sensorId, value);
-        _deviceProvider.updateDeviceCapability(
-          deviceId,
-          CapabilityType.battery.id,
-          battery,
-        );
+          final existingDevice = _deviceProvider.getDevice(deviceId);
+          if (existingDevice == null) {
+            final newDevice = SmartDevice(
+              deviceId: deviceId,
+              deviceName: deviceName,
+              isConnected: false, // Scanning only, not connected
+              lastSeen: DateTime.now(),
+              capabilities: {}, // Scanning only, no telemetry yet
+            );
+            _deviceProvider.addDevice(newDevice);
+          } else {
+            // Update last seen timestamp
+            final updatedDevice = existingDevice.copyWith(
+              lastSeen: DateTime.now(),
+            );
+            _deviceProvider.addDevice(updatedDevice);
+          }
+        }
       }
+    }, onError: (e) {
+      _connectionProvider.setError(e.toString());
+    });
 
-      final connectedCount = _deviceProvider.devices.values
-          .where((d) => d.isConnected)
-          .length;
-      _connectionProvider.setConnected(connectedCount);
+    FlutterBluePlus.startScan(
+      timeout: const Duration(seconds: 15),
+    ).catchError((e) {
+      _connectionProvider.setError(e.toString());
     });
   }
 
-  /// Stops mock streaming, cancels the active stream subscription, and resets connection state.
+  /// Stops the real BLE scan and cancels the active stream subscription.
   void stopMockBle() {
-    _mockBleService.stopMockStreaming();
+    FlutterBluePlus.stopScan().catchError((_) {});
     _deviceSubscription?.cancel();
     _deviceSubscription = null;
     _connectionProvider.reset();
@@ -89,6 +83,7 @@ class BleManager {
 
   /// Disposes of the active stream subscription and underlying mock BLE service resources.
   void dispose() {
+    FlutterBluePlus.stopScan().catchError((_) {});
     _deviceSubscription?.cancel();
     _deviceSubscription = null;
     _mockBleService.dispose();
