@@ -73,11 +73,18 @@ class BleManagerProvider extends ChangeNotifier {
   /// Starts the mock BLE simulation.
   Future<void> startSimulation() async {
     final granted = await _requestPermissions();
-    if (granted) {
-      _bleManager?.startMockBle();
-    } else {
+    if (!granted) {
       _connectionProvider?.setError("Bluetooth permissions not granted.");
+      return;
     }
+
+    final isBluetoothOn = _bleManager?.isBluetoothOn ?? false;
+    if (!isBluetoothOn) {
+      _connectionProvider?.setError("Bluetooth is turned off.");
+      return;
+    }
+
+    _bleManager?.startMockBle();
   }
 
   /// Stops the mock BLE simulation.
@@ -88,14 +95,24 @@ class BleManagerProvider extends ChangeNotifier {
   /// Connects to a device by its ID.
   Future<void> connect(String deviceId) async {
     final granted = await _requestPermissions();
-    if (granted) {
-      await _bleManager?.connect(deviceId);
-    } else {
+    if (!granted) {
       _connectionProvider?.setError(
         "Bluetooth permissions not granted.",
         deviceId: deviceId,
       );
+      return;
     }
+
+    final isBluetoothOn = _bleManager?.isBluetoothOn ?? false;
+    if (!isBluetoothOn) {
+      _connectionProvider?.setError(
+        "Bluetooth is turned off.",
+        deviceId: deviceId,
+      );
+      return;
+    }
+
+    await _bleManager?.connect(deviceId);
   }
 
   /// Disconnects from a device by its ID.

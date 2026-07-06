@@ -19,8 +19,16 @@ class BleManager {
   final Map<String, BluetoothDevice> _activeDevices = {};
   final Map<String, StreamSubscription<BluetoothConnectionState>> _connectionSubscriptions = {};
 
+  StreamSubscription<BluetoothAdapterState>? _adapterStateSubscription;
+  BluetoothAdapterState _currentAdapterState = BluetoothAdapterState.unknown;
+
   BleManager(this._deviceProvider, this._connectionProvider)
-    : _mockBleService = MockBleService();
+    : _mockBleService = MockBleService() {
+    _adapterStateSubscription = FlutterBluePlus.adapterState.listen((state) {
+      _currentAdapterState = state;
+      _handleAdapterStateChange(state);
+    });
+  }
 
   /// Connects to a device by its ID, performs service discovery, and monitors connection status.
   Future<void> connect(String deviceId) async {
@@ -85,6 +93,31 @@ class BleManager {
 
     // Update device provider state
     _deviceProvider.markDeviceDisconnected(deviceId);
+  }
+
+  /// Returns whether Bluetooth is currently turned on.
+  bool get isBluetoothOn => _currentAdapterState == BluetoothAdapterState.on;
+
+  void _handleAdapterStateChange(BluetoothAdapterState state) {
+    final bool isEnabled = state == BluetoothAdapterState.on;
+    _connectionProvider.setBluetoothState(isEnabled);
+
+    if (state == BluetoothAdapterState.unauthorized) {
+      _connectionProvider.setError("Bluetooth permissions not granted.");
+    }
+
+    if (!isEnabled) {
+      // 1. Stop scanning if active
+      if (_connectionProvider.isScanning) {
+        stopMockBle();
+      }
+
+      // 2. Disconnect active devices and reset their states
+      final deviceIds = _activeDevices.keys.toList();
+      for (final deviceId in deviceIds) {
+        disconnect(deviceId).catchError((_) {});
+      }
+    }
   }
 
   void _handleConnectionStateChange(String deviceId, BluetoothConnectionState state) {
@@ -227,6 +260,8 @@ class BleManager {
     FlutterBluePlus.stopScan().catchError((_) {});
     _deviceSubscription?.cancel();
     _deviceSubscription = null;
+    _adapterStateSubscription?.cancel();
+    _adapterStateSubscription = null;
 
     // Disconnect and clean up all active devices
     final deviceIds = _activeDevices.keys.toList();
