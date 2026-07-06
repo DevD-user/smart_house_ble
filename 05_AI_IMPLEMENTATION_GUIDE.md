@@ -27,7 +27,13 @@ happening again. Read the guardrails before giving any assistant a task.
 - Commit / checkpoint before starting each ticket so it can be cleanly reverted if
   the output doesn't match acceptance criteria.
 - Do not add new dependencies (pubspec.yaml packages) unless the ticket explicitly
-  names one.
+  names one, or explicit approval is given during the plan-review step.
+- Every ticket includes a Dependencies section ("Depends on: Task X.X" for
+  ordering, "Requires: <interface/state shape>" for prerequisite data models) —
+  do not attempt a ticket whose prerequisites aren't confirmed to exist yet.
+- For non-trivial or ambiguous tickets, require an implementation plan (files to
+  modify, why, assumptions) before any code is written, and wait for explicit
+  approval before proceeding.
 ```
 
 ---
@@ -40,222 +46,246 @@ Objective: one sentence, what this ticket delivers
 Scope: what is and isn't included
 Allowed files: exact files/paths that may be created or modified
 Do not modify: explicitly forbidden files/areas
+Dependencies: Depends on / Requires
 Acceptance criteria: checklist, testable
 Verification steps: how to confirm it works
 ```
 
 ---
 
-## Phase 1 Tickets — Devices Screen
+## Phase 1 — Devices Screen — STATUS: COMPLETE
 
-### Task 1.1 — Real BLE scan (replace mock scanning)
-```
-Objective: Replace mock device discovery with real BLE scanning for CC2640R2 boards.
-Scope: Scanning only. No connect/pair/rename logic yet.
-Allowed files:
-  - services/ble_manager.dart
-  - services/mock_ble_service.dart (only to gate/remove mock scan path)
-Do not modify:
-  - state/ble/ble_manager_provider.dart (unless scan result signature changes,
-    in which case only the minimal adapter code)
-  - Any screen file
-  - Firmware / GATT UUID constants
-Acceptance criteria:
-  - Scanning returns real nearby BLE devices (filtered to known service UUID if
-    defined)
-  - Mock service is fully bypassed for scan, not deleted (kept for future testing)
-Verification steps:
-  - Run app on physical phone with 1 board powered on, confirm device appears in
-    scan results within a few seconds
-```
+### Task 1.1 — Real BLE scan (replace mock scanning) — done
+Real BLE scanning implemented in `ble_manager.dart` using flutter_blue_plus,
+filtered by custom service UUID or device name match. Fixed during hardware
+testing: name-matching now normalizes whitespace/case ("SimplePeripheral" vs
+"Simple Peripheral"), and UUID matching accepts both the 128-bit and 16-bit
+(`fff0`) representations. Runtime Bluetooth/location permission handling added
+(kept in `BleManagerProvider`, not `BleManager`, to keep the service layer BLE-
+only). Adapter-state robustness added: scan/connect are blocked while Bluetooth
+is off, active scans/connections stop automatically if Bluetooth is turned off,
+and the app recovers cleanly when Bluetooth/permissions are restored.
 
-### Task 1.2 — Multi-device-ready connection state model
-```
-Objective: Extend BleManagerProvider to key connection state by deviceId instead of
-a single implicit device.
-Scope: State model only, not UI.
-Allowed files:
-  - state/ble/ble_manager_provider.dart
-  - state/connection/ (relevant files)
-Do not modify:
-  - services/ble_manager.dart (unless a method signature must add deviceId param)
-  - screens/, widgets/
-Acceptance criteria:
-  - Provider exposes state keyed by deviceId (e.g. Map<String, DeviceConnectionState>)
-  - Existing single-device behavior still works unchanged from the UI's perspective
-Verification steps:
-  - Connect one device, confirm connection state updates correctly
-  - Code review confirms no global/singleton "the current device" variable remains
-```
+**Known bug (deferred):** when Bluetooth or location is off and Scan is pressed,
+nothing happens with no visible warning to the user. The backend correctly
+blocks the scan; the UI does not yet surface the ConnectionProvider error state.
+Needs a small UI-layer ticket once Devices screen error/warning display is
+built.
 
-Task 1.3 — Devices Screen UI
-Objective: Build the Devices screen per 02_PRODUCT_ARCHITECTURE.md responsibilities.
-Scope: UI + wiring to existing providers only.
-Allowed files:
+### Task 1.2 — Multi-device-ready connection state model — done
+`ConnectionProvider` now tracks state via `Map<String, BleConnectionState>`
+keyed by deviceId, with derived properties (`anyDeviceConnected`,
+`connectedDeviceCount`, `isScanning`) instead of an ambiguous global
+"current connection state." Legacy single-device behavior preserved only when
+exactly one device is tracked.
 
-screens/devices_page.dart
-widgets/ (new device-list-item widget only, if needed)
+### Task 1.3 — Devices Screen UI — done
+Devices screen built with scan trigger, empty state, and device list. Device
+Detail placeholder extracted into its own file (`screens/device_detail_page.dart`)
+so Phase 2 can extend it directly. UI overflow bug (long device names +
+Connect/Disconnect + menu button) fixed by moving Connect/Disconnect to its own
+row below the device name.
 
-Do not modify:
+### Task 1.4A — BLE Connection Backend — done
+Real `connect(deviceId)`/`disconnect(deviceId)` implemented in `ble_manager.dart`
+using flutter_blue_plus (connect, service discovery, connection state stream,
+cleanup/dispose). Duplicate-connect guard in place at both UI and backend layers.
 
-state/ble/
-services/
-navigation_wrapper.dart (unless adding the route/tab entry itself)
+### Task 1.4B — Devices Screen Actions + Persistence — done
+Connect/Disconnect wired to the real backend. Rename (alias) and Forget
+implemented with local persistence via `storage/device_storage.dart`
+(SharedPreferences). Forgetting a connected device disconnects it first before
+clearing local state.
 
-Dependencies:
-
-Depends on: Task 1.2
-Requires: BleManagerProvider/ConnectionProvider exposing per-deviceId connection state (from Task 1.2), real scan logic in ble_manager.dart (from Task 1.1)
-
-Acceptance criteria:
-
-Lists scanned / known devices
-Scan button starts and stops BLE scanning
-Shows scanning state
-Shows empty state when no devices are available
-Tapping a device opens the Device Detail placeholder page
-No telemetry
-No controls
-No connection logic
-No persistence
-
-Verification:
-
-Manual test: scan starts, devices appear, empty state works, device tap opens placeholder
-
-**Task 1.4A — BLE Connection Backend**
-
-Objective: Implement real BLE connection lifecycle (connect, disconnect, service discovery) in the BLE service layer, feeding state into the existing per-deviceId connection model.
-
-Scope: Backend/service logic only. No UI changes.
-
-Allowed files:
-- services/ble_manager.dart
-- state/connection/ (only to wire real state transitions into the existing per-deviceId model — no structural rewrite of the model itself)
-
-Do not modify:
-- screens/
-- widgets/
-- state/device/
-- navigation_wrapper.dart
-- Firmware / BLE UUID definitions (read-only reference, no changes)
-- state/ble/ble_manager_provider.dart (unless a method signature must expose a new connect/disconnect call — minimal addition only)
-
-Dependencies:
-- Depends on: Task 1.2
-- Requires: ConnectionProvider/BleManagerProvider exposing per-deviceId connection state (from Task 1.2), scan logic returning real device IDs (from Task 1.1)
-
-Acceptance criteria:
-- `connect(deviceId)` establishes a real GATT connection to the specified device
-- `disconnect(deviceId)` cleanly terminates the connection
-- Service discovery runs after connect and confirms the known custom service UUID is present
-- Connection state transitions correctly through connecting → connected / error, updating the Task 1.2 per-deviceId state model
-- Disconnection (manual or unexpected, e.g. out of range) is detected and reflected in state
-- No UI is touched; this is verified via logs/state inspection, not screen behavior
-
-Verification steps:
-- flutter analyze passes
-- Manual test with real board: trigger connect, confirm GATT connection succeeds and state updates to "connected"
-- Manual test: disconnect, confirm state updates to "disconnected"
-- Manual test: move board out of range or power it off, confirm state reflects lost connection (not stuck on "connected")
+**Known limitation (deferred, low severity):** forgetting a device during an
+active scan may occasionally allow it to reappear immediately if an
+advertisement packet is already in flight in the BLE stack. Does not affect
+connection stability, rename persistence, disconnect behavior, or subsequent
+scans. UI consistency issue only.
 
 ---
 
-**Task 1.4B — Devices Screen Actions + Persistence**
+## Phase 2 — Telemetry & Control — sensors/actuators split
 
-Objective: Wire the Devices screen's connect/disconnect buttons to the real backend from Task 1.4A, and add rename/forget with local persistence.
+Phase 2 is multi-device-first from the start, per architecture update in
+03_TECHNICAL_ARCHITECTURE.md. Sensors (read path) and actuators (write path) are
+separate concepts:
 
-Scope: UI wiring + persistence only. No new backend connection logic.
+```
+READ PATH (Sensors)
+Board -> BleManager -> TelemetryProvider -> UI
 
-Allowed files:
-- screens/devices_page.dart
-- state/device/ (only if DeviceProvider needs rename/forget methods — minimal addition, not a model rewrite)
-- storage/ (new file(s) for persistence, e.g. Hive box or simple local storage for known devices)
-
-Do not modify:
-- services/ble_manager.dart
-- state/connection/
-- Firmware / BLE UUID definitions
-- Home page
-- navigation_wrapper.dart
-
-Dependencies:
-- Depends on: Task 1.4A
-- Requires: real `connect(deviceId)`/`disconnect(deviceId)` methods in ble_manager.dart (from Task 1.4A)
-
-Acceptance criteria:
-- Connect/Disconnect buttons on Devices screen call the real backend and reflect live state (not placeholder logic)
-- Rename updates device name in UI and persists across app restart
-- Forget removes device from list and persists across app restart (device does not reappear after restart unless rediscovered via scan)
-- Pair, if applicable to the BLE stack in use — otherwise mark N/A in the verification report
-
-Verification steps:
-- flutter analyze passes
-- Manual test with real board: connect/disconnect via UI, confirm behavior matches 1.4A's backend state
-- Manual test: rename a device, restart app, confirm name persists
-- Manual test: forget a device, restart app, confirm it stays gone
---------------------------
-## Phase 2 Tickets — Device Detail Screen
+WRITE PATH (Actuators)
+UI -> BleManagerProvider -> BleManager -> Board
+```
 
 ### Task 2.1 — Payload parsing utility (frozen protocol)
 ```
 Objective: Create a single shared utility that parses raw BLE notify bytes into a
-typed ADC value using little-endian uint16 decoding.
-Scope: Pure parsing function(s), no UI, no BLE connection logic.
+typed telemetry value using little-endian uint16 decoding, tagged with a sensor
+type.
+Scope: Pure parsing function(s) only. No UI, no providers, no BLE connection logic.
 Allowed files:
   - services/ble/payload_parser.dart (new)
 Do not modify:
   - Any other services/ or state/ files
+Requirements:
+  - Parse raw bytes (e.g. [0xFA, 0x0B]) into a uint16 value (little-endian)
+  - Output a TelemetryReading object matching the canonical shape frozen in
+    03_TECHNICAL_ARCHITECTURE.md: deviceId, sensorType, value, timestamp, unit
+    (optional, unused today), quality/status (optional, unused today)
+  - Reading model must carry a sensorType field even though only one is used today
+Dependencies:
+  - Depends on: none (pure utility)
+  - Requires: nothing from other tasks
 Acceptance criteria:
-  - Function takes raw bytes (e.g. [0xFA, 0x0B]) and returns correct uint16 (3066)
+  - Correctly decodes known byte pairs (e.g. [0xFA, 0x0B] -> 3066)
   - Unit test included covering at least 2 known byte pairs
+  - Reading model includes deviceId + sensorType + value + timestamp
 Verification steps:
   - Run unit test, confirm passes
+  - flutter analyze passes
 ```
 
-### Task 2.2 — Device Detail screen: connection status, RSSI, live graph
+### Task 2.2 — TelemetryProvider (multi-device sensor state)
 ```
-Objective: Build the core Device Detail view — status, RSSI, live rolling telemetry
-graph fed by the real BLE notify stream.
-Scope: Display only, using Task 2.1's parser and the per-device stream from
-BleManagerProvider. LED control is a separate ticket (2.3).
+Objective: Create a new, dedicated provider holding live telemetry readings for
+all connected devices, completely separate from DeviceProvider (registry) and
+ConnectionProvider (connection state).
+Scope: State model only. No UI.
 Allowed files:
-  - screens/device_detail_page.dart (new)
+  - state/telemetry/telemetry_provider.dart (new)
+  - services/ble_manager.dart (only to wire notify-stream output into this
+    provider — no changes to scanning/connection logic)
+Do not modify:
+  - state/device/device_provider.dart
+  - state/connection/connection_provider.dart
+  - screens/, widgets/
+  - Firmware / BLE UUID definitions
+Dependencies:
+  - Depends on: Task 1.4A (real connect/notify), Task 2.1 (payload parser)
+  - Requires: BleManager exposing a per-device notify stream (from 1.4A),
+    payload_parser.dart's typed reading model (from 2.1)
+Requirements:
+  - State shape: Map<String, Map<String, TelemetryReading>> — outer key
+    deviceId, inner key sensorType (structured this way from day one)
+  - Rolling in-memory buffer per (deviceId, sensorType), ~20-30 seconds
+    (Tier 1 storage)
+  - Expose: getLatest(deviceId, sensorType), getBuffer(deviceId, sensorType),
+    getAllLatest() (for Monitor's default "All Devices" view)
+  - READ-PATH ONLY — must never write/command anything to a device
+  - BleManager pushes parsed readings in; TelemetryProvider has no BLE-internal
+    knowledge
+  - One notify subscription per connected device; each notification is tagged
+    with its originating deviceId before parsing (per 03_TECHNICAL_ARCHITECTURE.md)
+Acceptance criteria:
+  - Connecting to a real device and receiving notifications populates
+    TelemetryProvider for that deviceId
+  - Multiple devices tracked independently, no cross-contamination
+  - Rolling buffer correctly drops readings older than ~20-30 seconds
+  - DeviceProvider and ConnectionProvider remain completely unchanged
+  - Explicit, stated behavior for what happens to a device's telemetry on
+    disconnect (do not leave this implicit — choose and document one: clear
+    immediately, clear after a timeout, or retain until reconnect/forget; log
+    the choice in DECISIONS_LOG.md)
+  - flutter analyze passes
+Verification steps:
+  - Connect one real board, confirm TelemetryProvider updates with live values
+  - (If second board available) connect both, confirm independent tracking
+  - Code review confirms DeviceProvider/ConnectionProvider untouched
+```
+
+### Task 2.3 — Device Detail: live status, RSSI, and rolling graph
+```
+Objective: Build the real (non-placeholder) Device Detail screen showing
+connection status, RSSI, and a live rolling telemetry graph, sourced from
+TelemetryProvider and keyed by the deviceId passed in from Devices/Home/Monitor.
+Scope: Display only. Read path. No controls (that's 2.4).
+Allowed files:
+  - screens/device_detail_page.dart (replacing the Task 1.3 placeholder content,
+    same file)
   - widgets/ (new graph/gauge widgets only, if needed)
 Do not modify:
-  - state/ble/, services/ (read-only consumption)
+  - state/telemetry/telemetry_provider.dart
+  - state/device/, state/connection/
   - Devices, Home, Monitor, Control, History screens
+  - services/ble_manager.dart
+Dependencies:
+  - Depends on: Task 2.2
+  - Requires: TelemetryProvider exposing getLatest(deviceId, sensorType) and
+    getBuffer(deviceId, sensorType)
 Acceptance criteria:
-  - Opens from Devices screen with the selected deviceId
-  - Shows live connection status and RSSI
-  - Shows a rolling graph of the last ~20-30 seconds of telemetry (in-memory buffer
-    only, no persistence required in this ticket)
+  - Opens from Devices/Home with the correct deviceId (same navigation as Task
+    1.3 — do not change how it's opened)
+  - Shows live connection status + RSSI (from ConnectionProvider, read-only)
+  - Shows a live rolling graph fed by TelemetryProvider's buffer for that
+    specific deviceId
+  - Works correctly regardless of how many other devices are connected
+  - No actuator controls present yet (explicitly out of scope for this ticket)
 Verification steps:
-  - Connect a real board, confirm graph updates live as the potentiometer is turned
+  - Connect a real board, open its Device Detail, confirm graph updates live
+  - flutter analyze passes
 ```
 
-### Task 2.3 — LED control (BLE characteristic write)
+### Task 2.4 — LED control (write path)
 ```
-Objective: Add LED on/off control to Device Detail, writing to the existing frozen
-BLE characteristic.
-Scope: Control UI + write call only. No new characteristics, no firmware changes.
+Objective: Add actuator control (LED on/off) to Device Detail, using a direct
+write path that does not involve TelemetryProvider at all.
+Scope: Control UI + write call only. No new characteristics, no firmware
+changes, no telemetry involvement.
 Allowed files:
   - screens/device_detail_page.dart
-  - services/ble_manager.dart (only to add/expose the write method if not present)
+  - services/ble_manager.dart (only to add/expose the write method if not
+    already present)
+  - state/ble/ble_manager_provider.dart (only if a thin passthrough method is
+    needed to call the write)
 Do not modify:
+  - state/telemetry/telemetry_provider.dart
   - Any GATT UUID constants or firmware-related definitions
   - Other screens
+  - state/device/, state/connection/
+Dependencies:
+  - Depends on: Task 2.3
+  - Requires: Device Detail screen in place (from 2.3). This ticket introduces
+    the write path: UI -> BleManagerProvider -> BleManager -> Board. Confirm
+    this path does not route through or touch TelemetryProvider in any way.
 Acceptance criteria:
-  - Toggle in Device Detail sends the correct write command
+  - Toggle in Device Detail sends the correct write command for that specific
+    deviceId
   - Physical LED on the board responds correctly
+  - Write path is fully independent of the read/telemetry path — no shared
+    state or coupling
+  - Works correctly per-device if multiple boards are connected (toggling
+    Board A's LED must not affect Board B)
 Verification steps:
-  - Manual test on physical board: toggle on/off, confirm LED state changes
-    accordingly, confirm no crash on rapid toggling
+  - Manual test on physical board: toggle on/off, confirm LED responds, no
+    crash on rapid toggling
+  - (If second board available) confirm toggling one board's LED doesn't
+    affect the other
+  - flutter analyze passes
 ```
+
+**Note for later:** Control screen (global/cross-device actions) and Monitor's
+filtering UI both reuse this same write path (2.4) and TelemetryProvider (2.2)
+respectively — no new providers needed when those screens' turn comes.
+
+---
+
+## Deferred / future items (not scheduled, logged for later)
+- UI warning when Bluetooth/location is off and Scan is pressed (Task 1.1 gap)
+- Monitor/Control filtering UI (device + sensorType / actuatorType filters)
+- Ability to monitor only one specific sensor of a board (Device Detail/Monitor,
+  once Phase 2 telemetry display exists)
+- Battery health indicator and digital/analog sensor count per board (Device
+  Detail, possibly Home)
+- Minor race condition: forgetting a device during an active scan may
+  occasionally allow it to reappear immediately (low severity, UI consistency
+  only)
 
 ---
 
 ## Phase 3+ tickets
-To be written once Phases 1-2 are verified working. Do not pre-generate Monitor/
+To be written once Phase 2 is verified working. Do not pre-generate Monitor/
 Control/History tickets yet — placeholder stub screens for those are covered by
-04_IMPLEMENTATION_ROADMAP.md and don't need detailed tickets until their turn comes.
+04_IMPLEMENTATION_ROADMAP.md and don't need detailed tickets until their turn
+comes.

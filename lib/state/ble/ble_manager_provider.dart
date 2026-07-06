@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../services/ble/payload_parser.dart';
 import '../../services/ble_manager.dart';
 import '../connection/connection_provider.dart';
 import '../device/device_provider.dart';
@@ -11,6 +12,12 @@ import '../device/device_provider.dart';
 class BleManagerProvider extends ChangeNotifier {
   BleManager? _bleManager;
   ConnectionProvider? _connectionProvider;
+
+  /// Exposes the telemetry stream from BleManager
+  Stream<TelemetryReading>? get telemetryStream => _bleManager?.telemetryStream;
+
+  /// Exposes the connection events stream from BleManager
+  Stream<String>? get connectionEventsStream => _bleManager?.connectionEventsStream;
 
   /// Initializes the BleManager if it hasn't been initialized yet.
   void initialize({

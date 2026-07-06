@@ -4,6 +4,7 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../models/smart_device.dart';
 import '../state/connection/connection_provider.dart';
 import '../state/device/device_provider.dart';
+import 'ble/payload_parser.dart';
 import 'mock_ble_service.dart';
 
 /// Manager for handling Bluetooth Low Energy (BLE) operations and stream telemetry.
@@ -18,6 +19,25 @@ class BleManager {
   // Multi-device tracking maps
   final Map<String, BluetoothDevice> _activeDevices = {};
   final Map<String, StreamSubscription<BluetoothConnectionState>> _connectionSubscriptions = {};
+
+  // Instance-level telemetry stream and subscription mapping
+  final StreamController<TelemetryReading> _telemetryController =
+      StreamController<TelemetryReading>.broadcast();
+
+  Stream<TelemetryReading> get telemetryStream => _telemetryController.stream;
+
+  // Connection events stream (emits deviceId when a new connection is initiated)
+  final StreamController<String> _connectionEventsController =
+      StreamController<String>.broadcast();
+
+  Stream<String> get connectionEventsStream => _connectionEventsController.stream;
+
+  final Map<String, List<StreamSubscription<List<int>>>> _telemetrySubscriptions = {};
+
+  // Telemetry-producing characteristic mapping (lowercase UUID -> sensorType)
+  static const Map<String, String> _telemetryCharacteristics = {
+    '48c5d821-ac2a-11e7-abc4-cec278b6b50a': 'voltage',
+  };
 
   StreamSubscription<BluetoothAdapterState>? _adapterStateSubscription;
   BluetoothAdapterState _currentAdapterState = BluetoothAdapterState.unknown;
@@ -37,6 +57,9 @@ class BleManager {
     if (_connectionSubscriptions.containsKey(deviceId)) {
       return;
     }
+
+    // Emit event that a new connection is initiated to clear old telemetry session
+    _connectionEventsController.add(deviceId);
 
     // 2. Set connecting state
     _connectionProvider.startConnecting(deviceId: deviceId);
@@ -74,6 +97,14 @@ class BleManager {
     final subscription = _connectionSubscriptions.remove(deviceId);
     if (subscription != null) {
       await subscription.cancel();
+    }
+
+    // Clean up telemetry subscriptions for this device
+    final telemetrySubs = _telemetrySubscriptions.remove(deviceId);
+    if (telemetrySubs != null) {
+      for (final sub in telemetrySubs) {
+        await sub.cancel();
+      }
     }
 
     _activeDevices.remove(deviceId);
@@ -152,6 +183,45 @@ class BleManager {
             existingDevice.copyWith(isConnected: true),
           );
         }
+
+        // Clean up any stale telemetry subscriptions first
+        final oldSubs = _telemetrySubscriptions.remove(deviceId);
+        if (oldSubs != null) {
+          for (final sub in oldSubs) {
+            await sub.cancel();
+          }
+        }
+
+        // Setup subscriptions for discovered telemetry characteristics
+        final List<StreamSubscription<List<int>>> subs = [];
+        for (final service in services) {
+          for (final characteristic in service.characteristics) {
+            final uuidStr = characteristic.uuid.toString().toLowerCase();
+            final sensorType = _telemetryCharacteristics[uuidStr];
+            final props = characteristic.properties;
+
+            if (sensorType != null && (props.notify || props.indicate)) {
+              await characteristic.setNotifyValue(true);
+              final sub = characteristic.onValueReceived.listen((bytes) {
+                try {
+                  final reading = PayloadParser.parse(
+                    deviceId: deviceId,
+                    sensorType: sensorType,
+                    bytes: bytes,
+                  );
+                  _telemetryController.add(reading);
+                } catch (_) {
+                  // Ignore parsing errors or handle gracefully
+                }
+              });
+              subs.add(sub);
+            }
+          }
+        }
+
+        if (subs.isNotEmpty) {
+          _telemetrySubscriptions[deviceId] = subs;
+        }
       } else {
         // Required service is missing, disconnect
         _connectionProvider.setError(
@@ -169,6 +239,15 @@ class BleManager {
   void _handleUnexpectedDisconnection(String deviceId) {
     final subscription = _connectionSubscriptions.remove(deviceId);
     subscription?.cancel();
+
+    // Clean up telemetry subscriptions for this device
+    final telemetrySubs = _telemetrySubscriptions.remove(deviceId);
+    if (telemetrySubs != null) {
+      for (final sub in telemetrySubs) {
+        sub.cancel();
+      }
+    }
+
     _activeDevices.remove(deviceId);
 
     // Update connection provider state
@@ -273,6 +352,20 @@ class BleManager {
     for (final deviceId in deviceIds) {
       disconnect(deviceId).catchError((_) {});
     }
+
+    // Cancel telemetry subscriptions
+    for (final subs in _telemetrySubscriptions.values) {
+      for (final sub in subs) {
+        sub.cancel();
+      }
+    }
+    _telemetrySubscriptions.clear();
+
+    // Close the telemetry controller stream
+    _telemetryController.close();
+
+    // Close the connection events controller stream
+    _connectionEventsController.close();
 
     _mockBleService.dispose();
   }

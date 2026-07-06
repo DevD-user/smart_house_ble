@@ -6,6 +6,7 @@ import 'screens/splash_screen.dart';
 import 'state/ble/ble_manager_provider.dart';
 import 'state/connection/connection_provider.dart';
 import 'state/device/device_provider.dart';
+import 'state/telemetry/telemetry_provider.dart';
 import 'state/theme/theme_provider.dart';
 import 'theme/app_theme.dart';
 
@@ -32,6 +33,17 @@ Future<void> main() async {
               connectionProvider: connectionProvider,
             );
             return bleProvider;
+          },
+        ),
+        ChangeNotifierProxyProvider<BleManagerProvider, TelemetryProvider>(
+          create: (_) => TelemetryProvider(),
+          update: (_, bleProvider, telemetryProvider) {
+            telemetryProvider ??= TelemetryProvider();
+            telemetryProvider.subscribeToStreams(
+              telemetryStream: bleProvider.telemetryStream,
+              connectionEventsStream: bleProvider.connectionEventsStream,
+            );
+            return telemetryProvider;
           },
         ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
