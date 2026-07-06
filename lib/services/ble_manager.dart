@@ -21,6 +21,7 @@ class BleManager {
 
   StreamSubscription<BluetoothAdapterState>? _adapterStateSubscription;
   BluetoothAdapterState _currentAdapterState = BluetoothAdapterState.unknown;
+  bool _isScanning = false;
 
   BleManager(this._deviceProvider, this._connectionProvider)
     : _mockBleService = MockBleService() {
@@ -182,11 +183,13 @@ class BleManager {
 
   /// Starts a real BLE scan and listens to the scan results, adding matching devices to the provider.
   void startMockBle() {
+    _isScanning = true;
     _connectionProvider.startScanning();
 
     _deviceSubscription?.cancel();
     _deviceSubscription = FlutterBluePlus.scanResults.listen(
       (results) {
+        if (!_isScanning) return;
         for (final r in results) {
           final device = r.device;
           final localName = r.advertisementData.advName;
@@ -249,6 +252,7 @@ class BleManager {
 
   /// Stops the real BLE scan and cancels the active stream subscription.
   void stopMockBle() {
+    _isScanning = false;
     FlutterBluePlus.stopScan().catchError((_) {});
     _deviceSubscription?.cancel();
     _deviceSubscription = null;
@@ -257,6 +261,7 @@ class BleManager {
 
   /// Disposes of the active stream subscription and underlying mock BLE service resources.
   void dispose() {
+    _isScanning = false;
     FlutterBluePlus.stopScan().catchError((_) {});
     _deviceSubscription?.cancel();
     _deviceSubscription = null;

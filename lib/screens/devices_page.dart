@@ -220,6 +220,7 @@ class DevicesPage extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
                     width: 48,
@@ -240,15 +241,27 @@ class DevicesPage extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          device.deviceName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: palette.text,
-                          ),
+                        // Row 1: Name & Menu
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                device.deviceName,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: palette.text,
+                                ),
+                              ),
+                            ),
+                            _buildDeviceMenu(context, device, palette),
+                          ],
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
+                        // Row 2: MAC Address
                         Text(
                           device.deviceId,
                           style: TextStyle(
@@ -257,7 +270,8 @@ class DevicesPage extends StatelessWidget {
                             color: palette.subText,
                           ),
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 8),
+                        // Row 3: Status & Last Seen
                         Row(
                           children: [
                             Container(
@@ -293,12 +307,14 @@ class DevicesPage extends StatelessWidget {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 12),
+                        // Row 4: Action Button (Right Aligned)
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: _buildActionButton(context, device.deviceId, deviceConnectionState, palette),
+                        ),
                       ],
                     ),
-                  ),
-                  Icon(
-                    Icons.chevron_right,
-                    color: palette.subText,
                   ),
                 ],
               ),
@@ -306,6 +322,223 @@ class DevicesPage extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildActionButton(
+    BuildContext context,
+    String deviceId,
+    BleConnectionState connectionState,
+    ThemePalette palette,
+  ) {
+    final bleProvider = context.read<BleManagerProvider>();
+
+    switch (connectionState) {
+      case BleConnectionState.connected:
+        return OutlinedButton(
+          onPressed: () => bleProvider.disconnect(deviceId),
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: Colors.red.withValues(alpha: 0.5)),
+            foregroundColor: Colors.red,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          ),
+          child: const Text('Disconnect', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        );
+
+      case BleConnectionState.connecting:
+      case BleConnectionState.reconnecting:
+        return SizedBox(
+          width: 88,
+          height: 38,
+          child: Center(
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.0,
+                valueColor: AlwaysStoppedAnimation<Color>(palette.accent),
+              ),
+            ),
+          ),
+        );
+
+      case BleConnectionState.idle:
+      case BleConnectionState.scanning:
+      case BleConnectionState.error:
+        return ElevatedButton(
+          onPressed: () => bleProvider.connect(deviceId),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: palette.accent,
+            foregroundColor: palette.isDark ? Colors.black : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            elevation: 0,
+          ),
+          child: const Text('Connect', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+        );
+    }
+  }
+
+  Widget _buildDeviceMenu(
+    BuildContext context,
+    SmartDevice device,
+    ThemePalette palette,
+  ) {
+    final deviceProvider = context.read<DeviceProvider>();
+
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, color: palette.subText),
+      color: palette.card,
+      onSelected: (value) {
+        if (value == 'rename') {
+          _showRenameDialog(context, device, deviceProvider, palette);
+        } else if (value == 'forget') {
+          _showForgetDialog(context, device, deviceProvider, palette);
+        }
+      },
+      itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(
+          value: 'rename',
+          child: Row(
+            children: [
+              Icon(Icons.edit, size: 18, color: palette.text),
+              const SizedBox(width: 8),
+              Text('Rename', style: TextStyle(color: palette.text)),
+            ],
+          ),
+        ),
+        const PopupMenuItem<String>(
+          value: 'forget',
+          child: Row(
+            children: [
+              Icon(Icons.delete_forever, size: 18, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Forget', style: TextStyle(color: Colors.red)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _showRenameDialog(
+    BuildContext context,
+    SmartDevice device,
+    DeviceProvider deviceProvider,
+    ThemePalette palette,
+  ) {
+    final controller = TextEditingController(text: device.deviceName);
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: palette.card,
+        title: Text(
+          'Rename Device',
+          style: TextStyle(color: palette.text, fontWeight: FontWeight.bold),
+        ),
+        content: TextField(
+          controller: controller,
+          style: TextStyle(color: palette.text),
+          decoration: InputDecoration(
+            hintText: 'Enter new device alias',
+            hintStyle: TextStyle(color: palette.subText),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: palette.accent),
+            ),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: palette.subText)),
+          ),
+          TextButton(
+            onPressed: () {
+              final newAlias = controller.text.trim();
+              deviceProvider.setDeviceAlias(device.deviceId, newAlias);
+              Navigator.pop(context);
+            },
+            child: Text('Save', style: TextStyle(color: palette.accent, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showForgetDialog(
+    BuildContext context,
+    SmartDevice device,
+    DeviceProvider deviceProvider,
+    ThemePalette palette,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: palette.card,
+        title: Text(
+          'Forget Device?',
+          style: TextStyle(color: palette.text, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'This will delete the custom alias. The device can still be rediscovered during future scans.',
+          style: TextStyle(color: palette.text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: TextStyle(color: palette.subText)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+
+              final connectionProvider = context.read<ConnectionProvider>();
+              final bleProvider = context.read<BleManagerProvider>();
+
+              // 1. Disconnect the device if connected or connecting and await completion
+              final state = connectionProvider.getDeviceConnectionState(device.deviceId);
+              final isConnected = state == BleConnectionState.connected ||
+                  state == BleConnectionState.connecting ||
+                  state == BleConnectionState.reconnecting;
+
+              if (isConnected) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Disconnecting and forgetting ${device.deviceName}...'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+                await bleProvider.disconnect(device.deviceId);
+              }
+
+              // 2. Stop the active BLE scan if one is currently running
+              if (connectionProvider.isScanning) {
+                bleProvider.stopSimulation();
+              }
+
+              if (!context.mounted) return;
+
+              // 3. Remove device configurations and state tracking
+              await deviceProvider.forgetDevice(device.deviceId);
+
+              if (!context.mounted) return;
+
+              if (!isConnected) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('${device.deviceName} forgotten successfully.'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              }
+            },
+            child: const Text('Forget', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
     );
   }
 
