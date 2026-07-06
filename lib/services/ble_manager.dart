@@ -152,52 +152,64 @@ class BleManager {
     _connectionProvider.startScanning();
 
     _deviceSubscription?.cancel();
-    _deviceSubscription = FlutterBluePlus.scanResults.listen((results) {
-      for (final r in results) {
-        final device = r.device;
-        final localName = r.advertisementData.advName;
-        final serviceUuids = r.advertisementData.serviceUuids;
+    _deviceSubscription = FlutterBluePlus.scanResults.listen(
+      (results) {
+        for (final r in results) {
+          final device = r.device;
+          final localName = r.advertisementData.advName;
+          final serviceUuids = r.advertisementData.serviceUuids;
 
-        // Check if device advertises the service UUID or matches the local name 'Simple Peripheral'
-        final bool hasServiceUuid = serviceUuids.any((uuid) =>
-            uuid.toString().toLowerCase() == _serviceUuid.toLowerCase());
-        final bool matchesName = localName.toLowerCase().contains('simple peripheral') ||
-            device.platformName.toLowerCase().contains('simple peripheral');
+          // Check if device advertises the service UUID (128-bit or 16-bit FFF0 format)
+          final bool hasServiceUuid = serviceUuids.any((uuid) {
+            final String uuidStr = uuid.toString().toLowerCase();
+            return uuidStr == _serviceUuid.toLowerCase() ||
+                uuidStr == 'fff0' ||
+                uuidStr.contains('fff0');
+          });
 
-        if (hasServiceUuid || matchesName) {
-          final String deviceId = device.remoteId.str;
-          final String deviceName = localName.isNotEmpty
-              ? localName
-              : (device.platformName.isNotEmpty
-                  ? device.platformName
-                  : 'Simple Peripheral');
+          // Check if matches name 'Simple Peripheral' or 'SimplePeripheral' (case-insensitive, ignoring whitespace)
+          final String normalizedLocal = localName.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+          final String normalizedPlatform = device.platformName.replaceAll(RegExp(r'\s+'), '').toLowerCase();
+          final bool matchesName =
+              normalizedLocal.contains('simpleperipheral') ||
+              normalizedPlatform.contains('simpleperipheral');
 
-          final existingDevice = _deviceProvider.getDevice(deviceId);
-          if (existingDevice == null) {
-            final newDevice = SmartDevice(
-              deviceId: deviceId,
-              deviceName: deviceName,
-              isConnected: false, // Scanning only, not connected
-              lastSeen: DateTime.now(),
-              capabilities: {}, // Scanning only, no telemetry yet
-            );
-            _deviceProvider.addDevice(newDevice);
-          } else {
-            // Update last seen timestamp
-            final updatedDevice = existingDevice.copyWith(
-              lastSeen: DateTime.now(),
-            );
-            _deviceProvider.addDevice(updatedDevice);
+          if (hasServiceUuid || matchesName) {
+            final String deviceId = device.remoteId.str;
+            final String deviceName = localName.isNotEmpty
+                ? localName
+                : (device.platformName.isNotEmpty
+                      ? device.platformName
+                      : 'Simple Peripheral');
+
+            final existingDevice = _deviceProvider.getDevice(deviceId);
+            if (existingDevice == null) {
+              final newDevice = SmartDevice(
+                deviceId: deviceId,
+                deviceName: deviceName,
+                isConnected: false, // Scanning only, not connected
+                lastSeen: DateTime.now(),
+                capabilities: {}, // Scanning only, no telemetry yet
+              );
+              _deviceProvider.addDevice(newDevice);
+            } else {
+              // Update last seen timestamp
+              final updatedDevice = existingDevice.copyWith(
+                lastSeen: DateTime.now(),
+              );
+              _deviceProvider.addDevice(updatedDevice);
+            }
           }
         }
-      }
-    }, onError: (e) {
-      _connectionProvider.setError(e.toString());
-    });
+      },
+      onError: (e) {
+        _connectionProvider.setError(e.toString());
+      },
+    );
 
-    FlutterBluePlus.startScan(
-      timeout: const Duration(seconds: 15),
-    ).catchError((e) {
+    FlutterBluePlus.startScan(timeout: const Duration(seconds: 15)).catchError((
+      e,
+    ) {
       _connectionProvider.setError(e.toString());
     });
   }
