@@ -42,6 +42,16 @@ class BleManagerProvider extends ChangeNotifier {
     _bleManager?.stopMockBle();
   }
 
+  /// Connects to a device by its ID.
+  Future<void> connect(String deviceId) async {
+    await _bleManager?.connect(deviceId);
+  }
+
+  /// Disconnects from a device by its ID.
+  Future<void> disconnect(String deviceId) async {
+    await _bleManager?.disconnect(deviceId);
+  }
+
   @override
   void dispose() {
     _bleManager?.dispose();
