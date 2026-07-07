@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../models/smart_device.dart';
 import '../state/connection/connection_provider.dart';
 import '../state/device/device_provider.dart';
+import '../state/telemetry/telemetry_provider.dart';
 import '../state/theme/theme_provider.dart';
 import 'device_detail_page.dart';
 
@@ -51,7 +51,43 @@ class HomePage extends StatelessWidget {
     // 3. Watch state from providers
     final deviceProvider = context.watch<DeviceProvider>();
     final connectionProvider = context.watch<ConnectionProvider>();
+    final telemetryProvider = context.watch<TelemetryProvider>();
     final devicesList = deviceProvider.devices.values.toList();
+
+    // 4. Compute last sync time on-the-fly across telemetry & connection activity
+    DateTime? latestSync;
+
+    // Check latest telemetry timestamp across all devices
+    final allLatestReadings = telemetryProvider.getAllLatest();
+    for (final deviceMap in allLatestReadings.values) {
+      for (final reading in deviceMap.values) {
+        if (latestSync == null || reading.timestamp.isAfter(latestSync)) {
+          latestSync = reading.timestamp;
+        }
+      }
+    }
+
+    // Check latest connection activity timestamp across all currently connected devices
+    for (final device in devicesList) {
+      final isConnected = connectionProvider.getDeviceConnectionState(device.deviceId) == BleConnectionState.connected;
+      if (isConnected) {
+        if (latestSync == null || device.lastSeen.isAfter(latestSync)) {
+          latestSync = device.lastSeen;
+        }
+      }
+    }
+
+    final String lastSyncText;
+    if (latestSync == null) {
+      lastSyncText = 'Never';
+    } else {
+      lastSyncText = '${latestSync.hour.toString().padLeft(2, '0')}:'
+          '${latestSync.minute.toString().padLeft(2, '0')}:'
+          '${latestSync.second.toString().padLeft(2, '0')}';
+    }
+
+    final totalDevices = devicesList.length;
+    final connectedDevices = connectionProvider.connectedDeviceCount;
 
     return Scaffold(
       backgroundColor: palette.background,
@@ -80,9 +116,152 @@ class HomePage extends StatelessWidget {
         ],
       ),
       body: SafeArea(
-        child: devicesList.isEmpty
+        child: totalDevices == 0
             ? _buildEmptyState(context, palette)
-            : _buildDeviceList(context, devicesList, palette, connectionProvider),
+            : SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    HouseOverviewCard(
+                      palette: palette,
+                      connectedCount: connectedDevices,
+                      totalCount: totalDevices,
+                      lastSync: lastSyncText,
+                      alerts: 'No alerts',
+                    ),
+                    const SizedBox(height: 24),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+                      child: Text(
+                        'Devices',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: palette.text,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ListView.separated(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: totalDevices,
+                      separatorBuilder: (context, index) => const SizedBox(height: 16),
+                      itemBuilder: (context, index) {
+                        final device = devicesList[index];
+                        final connectionState = connectionProvider.getDeviceConnectionState(device.deviceId);
+                        final isConnected = connectionState == BleConnectionState.connected;
+
+                        return Card(
+                          color: palette.card,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(
+                              color: palette.isDark
+                                  ? Colors.white.withValues(alpha: 0.04)
+                                  : Colors.black.withValues(alpha: 0.04),
+                              width: 1,
+                            ),
+                          ),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (context) => DeviceDetailPlaceholderPage(device: device),
+                                ),
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 18.0),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 48,
+                                    height: 48,
+                                    decoration: BoxDecoration(
+                                      color: isConnected
+                                          ? palette.accent.withValues(alpha: 0.08)
+                                          : (palette.isDark
+                                              ? Colors.white.withValues(alpha: 0.03)
+                                              : Colors.black.withValues(alpha: 0.02)),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      Icons.router,
+                                      color: isConnected
+                                          ? palette.accent
+                                          : (palette.isDark ? Colors.white38 : Colors.black38),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          device.deviceName,
+                                          style: TextStyle(
+                                            fontSize: 16,
+                                            fontWeight: FontWeight.bold,
+                                            color: palette.text,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          device.deviceId,
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontFamily: 'monospace',
+                                            color: palette.subText,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: BoxDecoration(
+                                                shape: BoxShape.circle,
+                                                color: isConnected ? Colors.green : Colors.redAccent,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              isConnected ? 'Connected' : 'Disconnected',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: isConnected ? Colors.green : palette.subText,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: palette.text.withValues(alpha: 0.3),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
       ),
     );
   }
@@ -138,130 +317,162 @@ class HomePage extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildDeviceList(
-    BuildContext context,
-    List<SmartDevice> devices,
-    ThemePalette palette,
-    ConnectionProvider connectionProvider,
-  ) {
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
-      itemCount: devices.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 16),
-      itemBuilder: (context, index) {
-        final device = devices[index];
-        final connectionState = connectionProvider.getDeviceConnectionState(device.deviceId);
-        final isConnected = connectionState == BleConnectionState.connected;
+class HouseOverviewCard extends StatelessWidget {
+  final ThemePalette palette;
+  final int connectedCount;
+  final int totalCount;
+  final String lastSync;
+  final String alerts;
 
-        return Card(
-          color: palette.card,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-            side: BorderSide(
-              color: palette.isDark
-                  ? Colors.white.withValues(alpha: 0.04)
-                  : Colors.black.withValues(alpha: 0.04),
-              width: 1,
-            ),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => DeviceDetailPlaceholderPage(device: device),
+  const HouseOverviewCard({
+    super.key,
+    required this.palette,
+    required this.connectedCount,
+    required this.totalCount,
+    required this.lastSync,
+    required this.alerts,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isHealthy = connectedCount > 0;
+
+    return Card(
+      color: palette.card,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(
+          color: palette.isDark
+              ? Colors.white.withValues(alpha: 0.04)
+              : Colors.black.withValues(alpha: 0.04),
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'House Overview',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: palette.text,
+                    letterSpacing: 0.5,
+                  ),
                 ),
-              );
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 18.0),
-              child: Row(
-                children: [
-                  // Decorative leading icon container
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: isConnected
-                          ? palette.accent.withValues(alpha: 0.08)
-                          : (palette.isDark
-                              ? Colors.white.withValues(alpha: 0.03)
-                              : Colors.black.withValues(alpha: 0.02)),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.router,
-                      color: isConnected
-                          ? palette.accent
-                          : (palette.isDark ? Colors.white38 : Colors.black38),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isHealthy
+                        ? Colors.green.withValues(alpha: 0.08)
+                        : Colors.redAccent.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isHealthy
+                          ? Colors.green.withValues(alpha: 0.2)
+                          : Colors.redAccent.withValues(alpha: 0.2),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  // Middle section with device details
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          device.deviceName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: palette.text,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: isHealthy ? Colors.green : Colors.redAccent,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          device.deviceId,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontFamily: 'monospace',
-                            color: palette.subText,
-                          ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        isHealthy ? 'Healthy' : 'Offline',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isHealthy ? Colors.green : Colors.redAccent,
                         ),
-                        const SizedBox(height: 8),
-                        // Connection status badge
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isConnected ? Colors.green : Colors.redAccent,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              isConnected ? 'Connected' : 'Disconnected',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isConnected ? Colors.green : palette.subText,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  // Chevron icon indicating tappability
-                  Icon(
-                    Icons.chevron_right,
-                    color: palette.text.withValues(alpha: 0.3),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatItem(
+                    icon: Icons.devices,
+                    label: 'Connected',
+                    value: '$connectedCount / $totalCount',
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatItem(
+                    icon: Icons.sync,
+                    label: 'Last Sync',
+                    value: lastSync,
+                  ),
+                ),
+                Expanded(
+                  child: _buildStatItem(
+                    icon: Icons.notifications_none,
+                    label: 'Alerts',
+                    value: alerts,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          icon,
+          size: 24,
+          color: palette.accent,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: palette.subText,
           ),
-        );
-      },
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: palette.text,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
     );
   }
 }
