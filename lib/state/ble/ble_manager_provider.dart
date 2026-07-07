@@ -127,6 +127,15 @@ class BleManagerProvider extends ChangeNotifier {
     await _bleManager?.disconnect(deviceId);
   }
 
+  /// Writes the LED state to the selected device.
+  Future<void> writeLedState(String deviceId, bool turnOn) async {
+    final ble = _bleManager;
+    if (ble == null) {
+      throw StateError('BleManager is not initialized');
+    }
+    await ble.writeLedState(deviceId, turnOn);
+  }
+
   @override
   void dispose() {
     _bleManager?.dispose();

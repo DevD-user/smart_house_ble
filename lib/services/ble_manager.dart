@@ -39,6 +39,12 @@ class BleManager {
     '48c5d821-ac2a-11e7-abc4-cec278b6b50a': 'voltage',
   };
 
+  // Cached LED write characteristics (deviceId -> characteristic)
+  final Map<String, BluetoothCharacteristic> _ledCharacteristics = {};
+
+  // LED control characteristic UUID constant
+  static const String _ledCharUuid = '48c5d822-ac2a-11e7-abc4-cec278b6b50a';
+
   StreamSubscription<BluetoothAdapterState>? _adapterStateSubscription;
   BluetoothAdapterState _currentAdapterState = BluetoothAdapterState.unknown;
   bool _isScanning = false;
@@ -107,6 +113,7 @@ class BleManager {
       }
     }
 
+    _ledCharacteristics.remove(deviceId);
     _activeDevices.remove(deviceId);
 
     if (device != null) {
@@ -197,6 +204,12 @@ class BleManager {
         for (final service in services) {
           for (final characteristic in service.characteristics) {
             final uuidStr = characteristic.uuid.toString().toLowerCase();
+
+            // Cache the LED write characteristic if found
+            if (uuidStr == _ledCharUuid.toLowerCase()) {
+              _ledCharacteristics[deviceId] = characteristic;
+            }
+
             final sensorType = _telemetryCharacteristics[uuidStr];
             final props = characteristic.properties;
 
@@ -248,6 +261,7 @@ class BleManager {
       }
     }
 
+    _ledCharacteristics.remove(deviceId);
     _activeDevices.remove(deviceId);
 
     // Update connection provider state
@@ -360,6 +374,7 @@ class BleManager {
       }
     }
     _telemetrySubscriptions.clear();
+    _ledCharacteristics.clear();
 
     // Close the telemetry controller stream
     _telemetryController.close();
@@ -368,5 +383,16 @@ class BleManager {
     _connectionEventsController.close();
 
     _mockBleService.dispose();
+  }
+
+  /// Writes a state value to the LED characteristic of the selected device.
+  /// Returns a Future that completes when the write operation succeeds.
+  Future<void> writeLedState(String deviceId, bool turnOn) async {
+    final characteristic = _ledCharacteristics[deviceId];
+    if (characteristic == null) {
+      throw StateError('LED write characteristic not available or device not connected');
+    }
+    final payload = [0x01, turnOn ? 0x01 : 0x00];
+    await characteristic.write(payload, withoutResponse: false);
   }
 }

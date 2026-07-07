@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'screens/splash_screen.dart';
 import 'state/ble/ble_manager_provider.dart';
@@ -14,6 +15,12 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
+  final prefs = await SharedPreferences.getInstance();
+  final savedThemeStr = prefs.getString('theme_preference');
+  final initialTheme = savedThemeStr == 'light'
+      ? AppThemeMode.light
+      : (savedThemeStr == 'dark' ? AppThemeMode.dark : AppThemeMode.dark);
 
   runApp(
     MultiProvider(
@@ -46,7 +53,7 @@ Future<void> main() async {
             return telemetryProvider;
           },
         ),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider(initialTheme: initialTheme)),
       ],
       child: const SmartHouseApp(),
     ),

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 
 import '../models/smart_device.dart';
+import '../state/ble/ble_manager_provider.dart';
 import '../state/connection/connection_provider.dart';
 import '../state/device/device_provider.dart';
 import '../state/telemetry/telemetry_provider.dart';
@@ -115,6 +116,12 @@ class DeviceDetailPlaceholderPage extends StatelessWidget {
                   ConnectionMetricsCard(
                     statusText: statusText,
                     statusColor: statusColor,
+                    palette: palette,
+                  ),
+                  const SizedBox(height: 16.0),
+                  LedControlCard(
+                    deviceId: latestDevice.deviceId,
+                    isConnected: connectionState == BleConnectionState.connected,
                     palette: palette,
                   ),
                   const SizedBox(height: 16.0),
@@ -645,6 +652,180 @@ class TelemetryGraphCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A stateful card widget for LED Control write actions.
+class LedControlCard extends StatefulWidget {
+  final String deviceId;
+  final bool isConnected;
+  final ThemePalette palette;
+
+  const LedControlCard({
+    super.key,
+    required this.deviceId,
+    required this.isConnected,
+    required this.palette,
+  });
+
+  @override
+  State<LedControlCard> createState() => _LedControlCardState();
+}
+
+class _LedControlCardState extends State<LedControlCard> {
+  bool _ledState = false;
+  bool _isPending = false;
+  String? _errorMessage;
+
+  Future<void> _toggleLed(bool newValue) async {
+    if (_isPending || !widget.isConnected) return;
+
+    setState(() {
+      _isPending = true;
+      _errorMessage = null;
+    });
+
+    final connectionProvider = Provider.of<ConnectionProvider>(context, listen: false);
+    final bleProvider = Provider.of<BleManagerProvider>(context, listen: false);
+
+    try {
+      await bleProvider.writeLedState(widget.deviceId, newValue);
+      setState(() {
+        _ledState = newValue;
+      });
+    } catch (e) {
+      debugPrint('BLE write error: $e');
+
+      final connectionState = connectionProvider.getDeviceConnectionState(widget.deviceId);
+
+      final String friendlyMessage;
+      if (connectionState != BleConnectionState.connected) {
+        friendlyMessage = 'Device disconnected. Reconnect to continue.';
+      } else {
+        final errStr = e.toString().toLowerCase();
+        if (e is StateError ||
+            errStr.contains('characteristic') ||
+            errStr.contains('not available') ||
+            errStr.contains('not connected') ||
+            errStr.contains('notavailable')) {
+          friendlyMessage = 'Board is not connected.';
+        } else {
+          friendlyMessage = 'Unable to control the LED. Please try again.';
+        }
+      }
+
+      setState(() {
+        _errorMessage = friendlyMessage;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPending = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = widget.isConnected && !_isPending;
+
+    return Card(
+      color: widget.palette.card,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: widget.palette.isDark ? Colors.white10 : Colors.black12,
+          width: 1,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'LED Control',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: widget.palette.text,
+              ),
+            ),
+            const Divider(height: 24, thickness: 0.5, color: Colors.white12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Board LED',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: widget.palette.text,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _isPending 
+                          ? 'Sending command...' 
+                          : 'Currently: ${_ledState ? "ON" : "OFF"}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _isPending 
+                            ? widget.palette.secondaryAccent 
+                            : widget.palette.subText,
+                      ),
+                    ),
+                  ],
+                ),
+                Row(
+                  children: [
+                    Text(
+                      'OFF',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: !_ledState ? Colors.redAccent : widget.palette.subText,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Switch(
+                      value: _ledState,
+                      onChanged: enabled ? _toggleLed : null,
+                      activeThumbColor: widget.palette.accent,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'ON',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: _ledState ? Colors.green : widget.palette.subText,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
