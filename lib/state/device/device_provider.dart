@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models/smart_device.dart';
 import '../../storage/device_storage.dart';
 
@@ -7,6 +9,7 @@ class DeviceProvider extends ChangeNotifier {
   final Map<String, SmartDevice> _devices = {};
   final Map<String, String> _aliases = {};
   final Map<String, String> _advertisedNames = {};
+  final Set<String> _knownDeviceIds = {};
 
   DeviceProvider() {
     _loadFromStorage();
@@ -15,6 +18,25 @@ class DeviceProvider extends ChangeNotifier {
   Future<void> _loadFromStorage() async {
     final loaded = await DeviceStorage.getAliases();
     _aliases.addAll(loaded);
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? jsonStr = prefs.getString('known_devices');
+      if (jsonStr != null) {
+        final Map<String, dynamic> decoded = json.decode(jsonStr) as Map<String, dynamic>;
+        decoded.forEach((key, value) {
+          final deviceMap = Map<String, dynamic>.from(value as Map);
+          final device = SmartDevice.fromMap(deviceMap);
+          // Force isConnected to false on startup
+          _devices[key] = device.copyWith(isConnected: false);
+          _advertisedNames[key] = device.deviceName;
+          _knownDeviceIds.add(key);
+        });
+      }
+    } catch (_) {
+      // Safely ignore load errors
+    }
+
     // Apply aliases to any devices already registered
     for (final entry in _devices.entries) {
       final alias = _aliases[entry.key];
@@ -23,6 +45,24 @@ class DeviceProvider extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  Future<void> _saveKnownDevices() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final Map<String, dynamic> serialized = {};
+      for (final deviceId in _knownDeviceIds) {
+        final device = _devices[deviceId];
+        if (device != null) {
+          // Force isConnected to false when persisting
+          final persistedDevice = device.copyWith(isConnected: false);
+          serialized[deviceId] = persistedDevice.toMap();
+        }
+      }
+      await prefs.setString('known_devices', json.encode(serialized));
+    } catch (_) {
+      // Safely ignore write errors
+    }
   }
 
   /// Exposes a read-only map of registered devices.
@@ -39,6 +79,13 @@ class DeviceProvider extends ChangeNotifier {
     } else {
       _devices[device.deviceId] = device;
     }
+
+    // A device becomes known when it is connected.
+    if (device.isConnected && !_knownDeviceIds.contains(device.deviceId)) {
+      _knownDeviceIds.add(device.deviceId);
+      _saveKnownDevices();
+    }
+
     notifyListeners();
   }
 
@@ -52,7 +99,6 @@ class DeviceProvider extends ChangeNotifier {
       final device = _devices[deviceId];
       if (device != null && originalName != null) {
         _devices[deviceId] = device.copyWith(deviceName: originalName);
-        notifyListeners();
       }
     } else {
       _aliases[deviceId] = alias;
@@ -60,9 +106,11 @@ class DeviceProvider extends ChangeNotifier {
       final device = _devices[deviceId];
       if (device != null) {
         _devices[deviceId] = device.copyWith(deviceName: alias);
-        notifyListeners();
       }
+      _knownDeviceIds.add(deviceId);
     }
+    await _saveKnownDevices();
+    notifyListeners();
   }
 
   /// Removes the device configuration (alias and device list tracking) from the provider.
@@ -76,6 +124,9 @@ class DeviceProvider extends ChangeNotifier {
     if (device != null && originalName != null) {
       _devices[deviceId] = device.copyWith(deviceName: originalName);
     }
+
+    _knownDeviceIds.remove(deviceId);
+    await _saveKnownDevices();
 
     removeDevice(deviceId);
   }
