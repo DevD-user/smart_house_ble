@@ -12,6 +12,8 @@ import '../device/device_provider.dart';
 class BleManagerProvider extends ChangeNotifier {
   BleManager? _bleManager;
   ConnectionProvider? _connectionProvider;
+  DeviceProvider? _deviceProvider;
+  VoidCallback? _deviceProviderListener;
 
   /// Exposes the telemetry stream from BleManager
   Stream<TelemetryReading>? get telemetryStream => _bleManager?.telemetryStream;
@@ -29,6 +31,24 @@ class BleManagerProvider extends ChangeNotifier {
       deviceProvider,
       connectionProvider,
     );
+
+    // Registry Forget Listener & Hygiene
+    if (_deviceProvider != deviceProvider) {
+      if (_deviceProvider != null && _deviceProviderListener != null) {
+        _deviceProvider!.removeListener(_deviceProviderListener!);
+      }
+      _deviceProvider = deviceProvider;
+      _deviceProviderListener = () {
+        final activeKnownIds = deviceProvider.devices.keys.toSet();
+        final cachedDeviceIds = _bleManager?.cachedDeviceIds.toList() ?? [];
+        for (final id in cachedDeviceIds) {
+          if (!activeKnownIds.contains(id)) {
+            _bleManager?.clearActuatorCache(id);
+          }
+        }
+      };
+      _deviceProvider!.addListener(_deviceProviderListener!);
+    }
   }
 
   /// Gets the connection state for a specific device.
@@ -128,16 +148,30 @@ class BleManagerProvider extends ChangeNotifier {
   }
 
   /// Writes the LED state to the selected device.
-  Future<void> writeLedState(String deviceId, bool turnOn) async {
+  Future<void> writeLedState(String deviceId, int peripheralId, bool turnOn) async {
     final ble = _bleManager;
     if (ble == null) {
       throw StateError('BleManager is not initialized');
     }
-    await ble.writeLedState(deviceId, turnOn);
+    await ble.writeLedState(deviceId, peripheralId, turnOn);
+    notifyListeners();
+  }
+
+  /// Retrieves the cached state of an actuator, defaulting to CachedActuatorState.unknown.
+  CachedActuatorState getActuatorState(String deviceId, int peripheralId) {
+    return _bleManager?.getActuatorState(deviceId, peripheralId) ?? CachedActuatorState.unknown;
+  }
+
+  /// Clears the cached actuator state for a specific device.
+  void clearActuatorCache(String deviceId) {
+    _bleManager?.clearActuatorCache(deviceId);
   }
 
   @override
   void dispose() {
+    if (_deviceProvider != null && _deviceProviderListener != null) {
+      _deviceProvider!.removeListener(_deviceProviderListener!);
+    }
     _bleManager?.dispose();
     super.dispose();
   }

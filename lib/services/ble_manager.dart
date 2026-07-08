@@ -7,6 +7,13 @@ import '../state/device/device_provider.dart';
 import 'ble/payload_parser.dart';
 import 'mock_ble_service.dart';
 
+/// Represents the application's cached state of an actuator.
+enum CachedActuatorState {
+  unknown,
+  off,
+  on,
+}
+
 /// Manager for handling Bluetooth Low Energy (BLE) operations and stream telemetry.
 class BleManager {
   static const String _serviceUuid = '48c5d820-ac2a-11e7-abc4-cec278b6b50a';
@@ -41,6 +48,9 @@ class BleManager {
 
   // Cached LED write characteristics (deviceId -> characteristic)
   final Map<String, BluetoothCharacteristic> _ledCharacteristics = {};
+
+  // Session-scoped actuator cache: deviceId -> (peripheralId -> state)
+  final Map<String, Map<int, CachedActuatorState>> _actuatorCache = {};
 
   // LED control characteristic UUID constant
   static const String _ledCharUuid = '48c5d822-ac2a-11e7-abc4-cec278b6b50a';
@@ -387,12 +397,29 @@ class BleManager {
 
   /// Writes a state value to the LED characteristic of the selected device.
   /// Returns a Future that completes when the write operation succeeds.
-  Future<void> writeLedState(String deviceId, bool turnOn) async {
+  Future<void> writeLedState(String deviceId, int peripheralId, bool turnOn) async {
     final characteristic = _ledCharacteristics[deviceId];
     if (characteristic == null) {
       throw StateError('LED write characteristic not available or device not connected');
     }
-    final payload = [0x01, turnOn ? 0x01 : 0x00];
+    final payload = [peripheralId, turnOn ? 0x01 : 0x00];
     await characteristic.write(payload, withoutResponse: false);
+
+    // Update the actuator cache only after a successful write completes
+    final deviceCache = _actuatorCache.putIfAbsent(deviceId, () => {});
+    deviceCache[peripheralId] = turnOn ? CachedActuatorState.on : CachedActuatorState.off;
   }
+
+  /// Retrieves the cached state of an actuator, defaulting to CachedActuatorState.unknown.
+  CachedActuatorState getActuatorState(String deviceId, int peripheralId) {
+    return _actuatorCache[deviceId]?[peripheralId] ?? CachedActuatorState.unknown;
+  }
+
+  /// Clears the cached actuator state for a specific device.
+  void clearActuatorCache(String deviceId) {
+    _actuatorCache.remove(deviceId);
+  }
+
+  /// Exposes the list of devices in the actuator cache.
+  Iterable<String> get cachedDeviceIds => _actuatorCache.keys;
 }

@@ -8,6 +8,7 @@ import '../state/connection/connection_provider.dart';
 import '../state/device/device_provider.dart';
 import '../state/telemetry/telemetry_provider.dart';
 import '../services/ble/payload_parser.dart';
+import '../services/ble_manager.dart';
 import '../state/theme/theme_provider.dart';
 
 /// Data class holding current theme palette colors to avoid hardcoded colors.
@@ -675,26 +676,29 @@ class LedControlCard extends StatefulWidget {
 }
 
 class _LedControlCardState extends State<LedControlCard> {
-  bool _ledState = false;
-  bool _isPending = false;
-  String? _errorMessage;
+  final Map<int, bool> _pendingStates = {
+    0x01: false,
+    0x02: false,
+  };
+  final Map<int, String?> _errorMessages = {
+    0x01: null,
+    0x02: null,
+  };
 
-  Future<void> _toggleLed(bool newValue) async {
-    if (_isPending || !widget.isConnected) return;
+  Future<void> _toggleLed(int peripheralId, bool newValue) async {
+    if (!widget.isConnected) return;
+    if (_pendingStates[peripheralId] == true) return;
 
     setState(() {
-      _isPending = true;
-      _errorMessage = null;
+      _pendingStates[peripheralId] = true;
+      _errorMessages[peripheralId] = null;
     });
 
     final connectionProvider = Provider.of<ConnectionProvider>(context, listen: false);
     final bleProvider = Provider.of<BleManagerProvider>(context, listen: false);
 
     try {
-      await bleProvider.writeLedState(widget.deviceId, newValue);
-      setState(() {
-        _ledState = newValue;
-      });
+      await bleProvider.writeLedState(widget.deviceId, peripheralId, newValue);
     } catch (e) {
       debugPrint('BLE write error: $e');
 
@@ -717,20 +721,146 @@ class _LedControlCardState extends State<LedControlCard> {
       }
 
       setState(() {
-        _errorMessage = friendlyMessage;
+        _errorMessages[peripheralId] = friendlyMessage;
       });
     } finally {
       if (mounted) {
         setState(() {
-          _isPending = false;
+          _pendingStates[peripheralId] = false;
         });
       }
     }
   }
 
+  Widget _buildLedRow({
+    required int peripheralId,
+    required String label,
+    required BleManagerProvider bleProvider,
+  }) {
+    final state = bleProvider.getActuatorState(widget.deviceId, peripheralId);
+    final isOn = state == CachedActuatorState.on;
+    final isUnknown = state == CachedActuatorState.unknown;
+    final isPending = _pendingStates[peripheralId] ?? false;
+    final errorMessage = _errorMessages[peripheralId];
+    final enabled = widget.isConnected && !isPending;
+
+    // Formatting rules for status and labels
+    final String statusText;
+    if (isPending) {
+      statusText = 'Sending command...';
+    } else if (isUnknown) {
+      statusText = 'Currently: Unknown';
+    } else {
+      statusText = 'Currently: ${isOn ? "ON" : "OFF"}';
+    }
+
+    final Color statusColor;
+    if (isPending) {
+      statusColor = widget.palette.secondaryAccent;
+    } else if (isUnknown) {
+      statusColor = widget.palette.subText.withValues(alpha: 0.5);
+    } else {
+      statusColor = widget.palette.subText;
+    }
+
+    final Color offColor;
+    if (isUnknown) {
+      offColor = widget.palette.subText.withValues(alpha: 0.4);
+    } else if (!isOn) {
+      offColor = Colors.redAccent;
+    } else {
+      offColor = widget.palette.subText;
+    }
+
+    final Color onColor;
+    if (isUnknown) {
+      onColor = widget.palette.subText.withValues(alpha: 0.4);
+    } else if (isOn) {
+      onColor = Colors.green;
+    } else {
+      onColor = widget.palette.subText;
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: widget.palette.text,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  statusText,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: statusColor,
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              children: [
+                Text(
+                  'OFF',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: offColor,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Opacity(
+                  opacity: isUnknown ? 0.6 : 1.0,
+                  child: Switch(
+                    value: isOn,
+                    onChanged: enabled ? (val) => _toggleLed(peripheralId, val) : null,
+                    activeThumbColor: widget.palette.accent,
+                    activeTrackColor: widget.palette.accent.withValues(alpha: 0.5),
+                    inactiveThumbColor: isUnknown ? Colors.grey : null,
+                    inactiveTrackColor: isUnknown ? Colors.grey.withValues(alpha: 0.3) : null,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  'ON',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: onColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        if (errorMessage != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            errorMessage,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.redAccent,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final enabled = widget.isConnected && !_isPending;
+    final bleProvider = context.watch<BleManagerProvider>();
 
     return Card(
       color: widget.palette.card,
@@ -756,74 +886,24 @@ class _LedControlCardState extends State<LedControlCard> {
               ),
             ),
             const Divider(height: 24, thickness: 0.5, color: Colors.white12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Board LED',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: widget.palette.text,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _isPending 
-                          ? 'Sending command...' 
-                          : 'Currently: ${_ledState ? "ON" : "OFF"}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: _isPending 
-                            ? widget.palette.secondaryAccent 
-                            : widget.palette.subText,
-                      ),
-                    ),
-                  ],
-                ),
-                Row(
-                  children: [
-                    Text(
-                      'OFF',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: !_ledState ? Colors.redAccent : widget.palette.subText,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Switch(
-                      value: _ledState,
-                      onChanged: enabled ? _toggleLed : null,
-                      activeThumbColor: widget.palette.accent,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'ON',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: _ledState ? Colors.green : widget.palette.subText,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+            
+            // 1. Red LED Control Row
+            _buildLedRow(
+              peripheralId: 0x01,
+              label: 'Red LED',
+              bleProvider: bleProvider,
             ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 12),
-              Text(
-                _errorMessage!,
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.redAccent,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+            
+            const SizedBox(height: 16),
+            const Divider(height: 8, thickness: 0.5, color: Colors.white12),
+            const SizedBox(height: 16),
+            
+            // 2. Green LED Control Row
+            _buildLedRow(
+              peripheralId: 0x02,
+              label: 'Green LED',
+              bleProvider: bleProvider,
+            ),
           ],
         ),
       ),
